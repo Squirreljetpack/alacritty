@@ -19,7 +19,7 @@ use log::{debug, info};
 use parking_lot::MutexGuard;
 use serde::{Deserialize, Serialize};
 use winit::cursor::CursorIcon;
-use winit::dpi::PhysicalSize;
+use winit::dpi::{PhysicalPosition, PhysicalSize};
 use winit::keyboard::ModifiersState;
 use winit::raw_window_handle::RawWindowHandle;
 
@@ -40,8 +40,6 @@ use crate::config::UiConfig;
 use crate::config::debug::RendererPreference;
 use crate::config::font::Font;
 use crate::config::window::Dimensions;
-#[cfg(not(windows))]
-use crate::config::window::StartupMode;
 use crate::display::bell::VisualBell;
 use crate::display::color::{List, Rgb};
 use crate::display::content::{RenderableContent, RenderableCursor};
@@ -341,8 +339,9 @@ impl DisplayUpdate {
 /// The display wraps a window, font rasterizer, and GPU renderer.
 pub struct Display {
     pub window: Window,
-
     pub size_info: SizeInfo,
+    pub visible: bool,
+    pub is_focused: bool,
 
     /// Hint highlighted by the mouse.
     pub highlighted_hint: Option<HintMatch>,
@@ -404,7 +403,6 @@ impl Display {
         window: Window,
         gl_context: NotCurrentContext,
         config: &UiConfig,
-        _tabbed: bool,
     ) -> Result<Display, Error> {
         let raw_window_handle = window.raw_window_handle();
 
@@ -419,10 +417,20 @@ impl Display {
         let metrics = glyph_cache.font_metrics();
         let (cell_width, cell_height) = compute_cell_size(config, &metrics);
 
-        // Resize the window to account for the user configured size.
-        if let Some(dimensions) = config.window.dimensions() {
-            let size = window_size(config, dimensions, cell_width, cell_height, scale_factor);
-            window.request_inner_size(size);
+        let dimensions = config.window.dimensions();
+        let window_size = window_size(config, dimensions, cell_width, cell_height, scale_factor);
+        window.request_inner_size(window_size);
+        info!("Window size: {:?}", window_size);
+
+        if let Some(monitor_size) =
+            window.current_monitor().and_then(|s| s.current_video_mode()).map(|s| s.size())
+        {
+            let x = (monitor_size.width.saturating_sub(window_size.width) / 2) as i32;
+            let y = (monitor_size.height.saturating_sub(window_size.height) / 2) as i32;
+
+            info!("Monitor: {:?}, position: ({}, {})", monitor_size, x, y);
+
+            window.set_position(PhysicalPosition::new(x, y));
         }
 
         // Create the GL surface to draw into.
@@ -455,7 +463,7 @@ impl Display {
             cell_height,
             padding.0,
             padding.1,
-            config.window.dynamic_padding && config.window.dimensions().is_none(),
+            true,
         );
 
         info!("Cell size: {cell_width} x {cell_height}");
@@ -489,20 +497,8 @@ impl Display {
 
         window.set_visible(true);
 
-        // Always focus new windows, even if no Alacritty window is currently focused.
-        #[cfg(target_os = "macos")]
-        window.focus_window();
-
-        #[allow(clippy::single_match)]
-        #[cfg(not(windows))]
-        if !_tabbed {
-            match config.window.startup_mode {
-                #[cfg(target_os = "macos")]
-                StartupMode::SimpleFullscreen => window.set_simple_fullscreen(true),
-                StartupMode::Maximized if !is_wayland => window.set_maximized(true),
-                _ => (),
-            }
-        }
+        // focus doesn't work
+        // log::debug!("focused: {:?}, visible: {:?}", window.has_focus(), window.is_visible());
 
         let hint_state = HintState::new(config.hints.alphabet());
 
@@ -539,7 +535,19 @@ impl Display {
             cursor_hidden: Default::default(),
             meter: Default::default(),
             ime: Default::default(),
+            visible: true,
+            is_focused: false,
         })
+    }
+
+    pub fn show(&mut self) {
+        self.window.set_visible(true);
+        self.visible = true;
+    }
+
+    pub fn hide(&mut self) {
+        self.window.set_visible(false);
+        self.visible = false;
     }
 
     #[inline]
@@ -689,15 +697,8 @@ impl Display {
 
         let padding = config.window.padding(self.window.scale_factor as f32);
 
-        let mut new_size = SizeInfo::new(
-            width,
-            height,
-            cell_width,
-            cell_height,
-            padding.0,
-            padding.1,
-            config.window.dynamic_padding,
-        );
+        let mut new_size =
+            SizeInfo::new(width, height, cell_width, cell_height, padding.0, padding.1, true);
 
         // Update number of column/lines in the viewport.
         let search_active = search_state.history_index.is_some();

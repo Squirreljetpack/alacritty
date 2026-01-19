@@ -10,12 +10,8 @@ use std::ffi::OsStr;
 use std::fmt::Debug;
 #[cfg(not(windows))]
 use std::os::unix::io::RawFd;
-#[cfg(unix)]
-use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::rc::Rc;
-#[cfg(not(windows))]
-use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
 use std::{env, f32, mem};
@@ -25,7 +21,7 @@ use crossfont::Size as FontSize;
 use glutin::config::{Config as GlutinConfig, GetGlConfig};
 #[cfg(not(target_os = "macos"))]
 use glutin::display::{Display as GlDisplay, GetGlDisplay};
-use log::{debug, error, info, warn};
+use log::{debug, info, warn};
 #[cfg(windows)]
 use windows_sys::Win32::System::Console::FreeConsole;
 use winit::application::ApplicationHandler;
@@ -50,27 +46,22 @@ use alacritty_terminal::term::search::{Match, RegexSearch};
 use alacritty_terminal::term::{self, ClipboardType, Term, TermMode};
 use alacritty_terminal::vte::ansi::NamedColor;
 
-use crate::ConfigMonitor;
-#[cfg(unix)]
-use crate::cli::{IpcConfig, ParsedOptions};
 use crate::cli::{Options as CliOptions, WindowOptions};
 use crate::clipboard::Clipboard;
 use crate::config::ui_config::{HintAction, HintInternalAction};
 use crate::config::{self, UiConfig};
-#[cfg(not(windows))]
-use crate::daemon::foreground_process_path;
 use crate::daemon::spawn_daemon;
 use crate::display::color::Rgb;
 use crate::display::hint::HintMatch;
 use crate::display::window::{ImeInhibitor, Window};
 use crate::display::{Display, Preedit, SizeInfo};
 use crate::input::{self, ActionContext as _, FONT_SIZE_STEP};
-#[cfg(unix)]
-use crate::ipc::{self, SocketReply};
 use crate::logging::{LOG_TARGET_CONFIG, LOG_TARGET_WINIT};
 use crate::message_bar::{Message, MessageBuffer};
 use crate::scheduler::{Scheduler, TimerId, Topic};
+use crate::tray::Tray;
 use crate::window_context::WindowContext;
+use crate::{_dbg, ConfigMonitor, tray};
 
 /// Duration after the last user input until an unlimited search is performed.
 pub const TYPING_SEARCH_DELAY: Duration = Duration::from_millis(500);
@@ -92,17 +83,15 @@ const BELL_CMD_COOLDOWN: Duration = Duration::from_millis(100);
 /// Stores some state from received events and dispatches actions when they are
 /// triggered.
 pub struct Processor {
-    config_monitor: Option<ConfigMonitor>,
+    pub config_monitor: Option<ConfigMonitor>,
     clipboard: Clipboard,
     scheduler: Scheduler,
-    initial_window_options: Option<WindowOptions>,
+    tray: Option<Tray>,
     initial_window_error: Rc<Cell<Option<Box<dyn Error>>>>,
     windows: HashMap<WindowId, WindowContext, RandomState>,
     proxy: EventLoopProxy,
     user_events_rx: Receiver<Event>,
     gl_config: Option<GlutinConfig>,
-    #[cfg(unix)]
-    global_ipc_options: ParsedOptions,
     cli_options: CliOptions,
     config: Rc<UiConfig>,
 }
@@ -117,7 +106,6 @@ impl Processor {
         user_events_rx: Receiver<Event>,
     ) -> Processor {
         let scheduler = Scheduler::new(proxy.clone());
-        let initial_window_options = Some(cli_options.window_options.clone());
 
         // Disable all device events, since we don't care about them.
         event_loop.listen_device_events(DeviceEvents::Never);
@@ -136,18 +124,16 @@ impl Processor {
         }
 
         Processor {
-            initial_window_options,
             initial_window_error: Default::default(),
             user_events_rx,
             cli_options,
             proxy,
             scheduler,
+            tray: None,
             gl_config: None,
             config: Rc::new(config),
             clipboard,
             windows: Default::default(),
-            #[cfg(unix)]
-            global_ipc_options: Default::default(),
             config_monitor,
         }
     }
@@ -159,13 +145,12 @@ impl Processor {
     pub fn create_initial_window(
         &mut self,
         event_loop: &dyn ActiveEventLoop,
-        window_options: WindowOptions,
     ) -> Result<(), Box<dyn Error>> {
         let window_context = WindowContext::initial(
             event_loop,
             self.proxy.clone(),
             self.config.clone(),
-            window_options,
+            WindowOptions::default(),
         )?;
 
         self.gl_config = Some(window_context.display.gl_context().config());
@@ -175,27 +160,18 @@ impl Processor {
     }
 
     /// Create a new terminal window.
+    #[allow(unused)]
     pub fn create_window(
         &mut self,
         event_loop: &dyn ActiveEventLoop,
-        options: WindowOptions,
     ) -> Result<(), Box<dyn Error>> {
         let gl_config = self.gl_config.as_ref().unwrap();
-
-        // Override config with CLI/IPC options.
-        let mut config_overrides = options.config_overrides();
-        #[cfg(unix)]
-        config_overrides.extend_from_slice(&self.global_ipc_options);
-        let mut config = self.config.clone();
-        config = config_overrides.override_config_rc(config);
 
         let window_context = WindowContext::additional(
             gl_config,
             event_loop,
             self.proxy.clone(),
-            config,
-            options,
-            config_overrides,
+            self.config.clone(),
         )?;
 
         self.windows.insert(window_context.id(), window_context);
@@ -272,18 +248,32 @@ impl ApplicationHandler for Processor {
 
     fn can_create_surfaces(&mut self, _event_loop: &dyn ActiveEventLoop) {}
 
-    fn new_events(&mut self, event_loop: &dyn ActiveEventLoop, cause: StartCause) {
-        if cause != StartCause::Init || self.cli_options.daemon {
+    fn new_events(&mut self, _event_loop: &dyn ActiveEventLoop, cause: StartCause) {
+        if cause != StartCause::Init {
             return;
         }
 
-        if let Some(window_options) = self.initial_window_options.take() {
-            if let Err(err) = self.create_initial_window(event_loop, window_options) {
-                self.initial_window_error.set(Some(err));
-                event_loop.exit();
-                return;
-            }
+        {
+            self.tray = tray::init_tray(self.proxy.clone()).ok();
         }
+
+        // We have to request a redraw here to have the icon actually show up.
+        // Winit only exposes a redraw method on the Window so we use core-foundation directly.
+        #[cfg(target_os = "macos")]
+        {
+            use objc2_core_foundation::CFRunLoop;
+
+            let rl = CFRunLoop::main().unwrap();
+            CFRunLoop::wake_up(&rl);
+        }
+
+        // if let Some(window_options) = self.initial_window_options.take() {
+        //     if let Err(err) = self.create_initial_window(event_loop, window_options) {
+        //         self.initial_window_error.set(Some(err));
+        //         event_loop.exit();
+        //         return;
+        //     }
+        // }
 
         info!("Initialisation complete");
     }
@@ -332,57 +322,6 @@ impl ApplicationHandler for Processor {
 
             // Handle events which don't mandate the WindowId.
             match (event.payload, event.window_id.as_ref()) {
-                // Process IPC config update.
-                #[cfg(unix)]
-                (EventType::IpcConfig(ipc_config), window_id) => {
-                    // Try and parse options as toml.
-                    let mut options = ParsedOptions::from_options(&ipc_config.options);
-
-                    // Override IPC config for each window with matching ID.
-                    for (_, window_context) in self
-                        .windows
-                        .iter_mut()
-                        .filter(|(id, _)| window_id.is_none() || window_id == Some(*id))
-                    {
-                        if ipc_config.reset {
-                            window_context.reset_window_config(self.config.clone());
-                        } else {
-                            window_context.add_window_config(self.config.clone(), &options);
-                        }
-                    }
-
-                    // Persist global options for future windows.
-                    if window_id.is_none() {
-                        if ipc_config.reset {
-                            self.global_ipc_options.clear();
-                        } else {
-                            self.global_ipc_options.append(&mut options);
-                        }
-                    }
-                },
-                // Process IPC config requests.
-                #[cfg(unix)]
-                (EventType::IpcGetConfig(stream), window_id) => {
-                    // Get the config for the requested window ID.
-                    let config = match self.windows.iter().find(|(id, _)| window_id == Some(*id)) {
-                        Some((_, window_context)) => window_context.config(),
-                        None => &self.global_ipc_options.override_config_rc(self.config.clone()),
-                    };
-
-                    // Convert config to JSON format.
-                    let config_json = match serde_json::to_string(&config) {
-                        Ok(config_json) => config_json,
-                        Err(err) => {
-                            error!("Failed config serialization: {err}");
-                            continue;
-                        },
-                    };
-
-                    // Send JSON config to the socket.
-                    if let Ok(mut stream) = stream.try_clone() {
-                        ipc::send_reply(&mut stream, SocketReply::GetConfig(config_json));
-                    }
-                },
                 (EventType::ConfigReload(path), _) => {
                     // Clear config logs from message bar for all terminals.
                     for window_context in self.windows.values_mut() {
@@ -413,7 +352,15 @@ impl ApplicationHandler for Processor {
                     }
                 },
                 // Create a new terminal window.
-                (EventType::CreateWindow(options), _) => {
+                (EventType::CreateWindow, _) => {
+                    // todo: only create window if none are on the current screen
+                    if !self.windows.is_empty() {
+                        if let Some(window) = self.windows.values().next() {
+                            window.display.window.focus();
+                        }
+                        return;
+                    }
+
                     // XXX Ensure that no context is current when creating a new window,
                     // otherwise it may lock the backing buffer of the
                     // surface of current context when asking
@@ -423,15 +370,43 @@ impl ApplicationHandler for Processor {
                     }
 
                     if self.gl_config.is_none() {
-                        // Handle initial window creation in daemon mode.
-                        if let Err(err) = self.create_initial_window(event_loop, options) {
+                        // Handle initial window creation
+                        if let Err(err) = self.create_initial_window(event_loop) {
                             self.initial_window_error.set(Some(err));
                             event_loop.exit();
                         }
-                    } else if let Err(err) = self.create_window(event_loop, options) {
-                        error!("Could not open window: {err:?}");
+                    } else if let Err(err) = self.create_window(event_loop) {
+                        log::error!("Could not open window: {err:?}");
                     }
                 },
+
+                (EventType::ShowWindow(visibility), None) => {
+                    // todo: get the current window on this display instead of the first
+                    let Some(window_context) = self.windows.values_mut().next() else {
+                        let _ = self.proxy.send_event(Event::new(EventType::CreateWindow, None));
+                        return;
+                    };
+
+                    let show = visibility.unwrap_or(
+                        !(window_context.display.visible && window_context.display.is_focused),
+                    );
+                    if show {
+                        window_context.display.show();
+                    } else {
+                        window_context.display.hide();
+                    }
+                },
+
+                (EventType::Terminal(TerminalEvent::Exit), None) => {
+                    for (_, window_context) in self.windows.drain() {
+                        self.scheduler.unschedule_window(window_context.id());
+                    }
+                },
+
+                (EventType::Quit, _) => {
+                    event_loop.exit();
+                },
+
                 // Process events affecting all windows.
                 (payload, None) => {
                     let event = WinitEvent::UserEvent(Event::new(payload, None));
@@ -463,22 +438,27 @@ impl ApplicationHandler for Processor {
                         {
                             window_context.remove()
                         },
-                        _ => continue,
+                        _ => return,
                     };
 
                     // Unschedule pending events.
                     self.scheduler.unschedule_window(window_context.id());
+                },
+                (EventType::ShowWindow(visibility), Some(window_id)) => {
+                    let Some(window_context) = self.windows.get_mut(window_id) else {
+                        return;
+                    };
 
-                    // Shutdown if no more terminals are open.
-                    if self.windows.is_empty() && !self.cli_options.daemon {
-                        // Write ref tests of last window to disk.
-                        if self.config.debug.ref_test {
-                            window_context.write_ref_test_results();
-                        }
-
-                        event_loop.exit();
+                    let show = visibility.unwrap_or(
+                        !(window_context.display.visible && window_context.display.is_focused),
+                    );
+                    if show {
+                        window_context.display.show();
+                    } else {
+                        window_context.display.hide();
                     }
                 },
+
                 // NOTE: This event bypasses batching to minimize input latency.
                 (EventType::Frame, Some(window_id)) => {
                     if let Some(window_context) = self.windows.get_mut(window_id) {
@@ -500,7 +480,7 @@ impl ApplicationHandler for Processor {
                         );
                     }
                 },
-            }
+            };
         }
     }
 
@@ -584,15 +564,13 @@ pub enum EventType {
     ConfigReload(PathBuf),
     Message(Message),
     Scroll(Scroll),
-    CreateWindow(WindowOptions),
-    #[cfg(unix)]
-    IpcConfig(IpcConfig),
-    #[cfg(unix)]
-    IpcGetConfig(Arc<UnixStream>),
+    CreateWindow,
+    ShowWindow(Option<bool>), // Some(bool) to set, None to toggle
     BlinkCursor,
     BlinkCursorTimeout,
     SearchNext,
     Frame,
+    Quit,
 }
 
 impl From<TerminalEvent> for EventType {
@@ -918,24 +896,8 @@ impl<'a, N: Notify + 'a, T: EventListener> input::ActionContext<T> for ActionCon
         self.spawn_daemon(&alacritty, &args);
     }
 
-    #[cfg(not(windows))]
-    fn create_new_window(&mut self, #[cfg(target_os = "macos")] tabbing_id: Option<String>) {
-        let mut options = WindowOptions::default();
-        options.terminal_options.working_directory =
-            foreground_process_path(self.master_fd, self.shell_pid).ok();
-
-        #[cfg(target_os = "macos")]
-        {
-            options.window_tabbing_id = tabbing_id;
-        }
-
-        self.event_proxy.send_event(Event::new(EventType::CreateWindow(options), None));
-    }
-
-    #[cfg(windows)]
     fn create_new_window(&mut self) {
-        self.event_proxy
-            .send_event(Event::new(EventType::CreateWindow(WindowOptions::default()), None));
+        let _ = self.event_proxy.send_event(Event::new(EventType::CreateWindow, None));
     }
 
     fn spawn_daemon<I, S>(&self, program: &str, args: I)
@@ -1909,13 +1871,13 @@ impl input::Processor<EventProxy, ActionContext<'_, Notifier, EventProxy>> {
                 },
                 EventType::Terminal(event) => match event {
                     TerminalEvent::Title(title) => {
-                        if !self.ctx.preserve_title && self.ctx.config.window.dynamic_title {
+                        if !self.ctx.preserve_title && true {
                             self.ctx.window().set_title(title);
                         }
                     },
                     TerminalEvent::ResetTitle => {
                         let window_config = &self.ctx.config.window;
-                        if !self.ctx.preserve_title && window_config.dynamic_title {
+                        if !self.ctx.preserve_title && true {
                             self.ctx.display.window.set_title(window_config.identity.title.clone());
                         }
                     },
@@ -1971,12 +1933,12 @@ impl input::Processor<EventProxy, ActionContext<'_, Notifier, EventProxy>> {
                     TerminalEvent::CursorBlinkingChange => self.ctx.update_cursor_blinking(),
                     TerminalEvent::Exit | TerminalEvent::ChildExit(_) | TerminalEvent::Wakeup => (),
                 },
-                #[cfg(unix)]
-                EventType::IpcConfig(_) | EventType::IpcGetConfig(..) => (),
                 EventType::Message(_)
                 | EventType::ConfigReload(_)
-                | EventType::CreateWindow(_)
-                | EventType::Frame => (),
+                | EventType::CreateWindow
+                | EventType::ShowWindow(_)
+                | EventType::Frame
+                | EventType::Quit => (),
             },
             WinitEvent::WindowEvent(event) => {
                 match event {
@@ -2051,6 +2013,12 @@ impl input::Processor<EventProxy, ActionContext<'_, Notifier, EventProxy>> {
                             self.ctx.window().set_urgent(false);
                         }
 
+                        // note that pressing hotkey can cause it to become unfocused
+                        if is_focused {
+                            self.ctx.display.visible = true
+                        };
+                        self.ctx.display.is_focused = is_focused;
+
                         self.ctx.update_cursor_blinking();
                         self.on_focus_change(is_focused);
 
@@ -2059,6 +2027,15 @@ impl input::Processor<EventProxy, ActionContext<'_, Notifier, EventProxy>> {
                     },
                     WindowEvent::Occluded(occluded) => {
                         *self.ctx.occluded = occluded;
+                        _dbg!(occluded);
+                        if occluded {
+                            self.ctx.display().hide();
+                        }
+                        // x11 windows can spawn unfocused. But they emit an occluded: false event we can listen on.
+                        #[cfg(all(feature = "x11", not(any(target_os = "macos", windows))))]
+                        if !occluded && self.ctx.display.visible {
+                            self.ctx.display.window.focus();
+                        }
                     },
                     WindowEvent::DragDropped { paths, .. } => {
                         for path in paths {

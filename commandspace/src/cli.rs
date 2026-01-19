@@ -25,10 +25,6 @@ pub struct Options {
     #[clap(long)]
     pub print_events: bool,
 
-    /// Generates ref test.
-    #[clap(long, conflicts_with("daemon"))]
-    pub ref_test: bool,
-
     /// X11 window ID to embed Alacritty within (decimal or hexadecimal with "0x" prefix).
     #[clap(long)]
     pub embed: Option<String>,
@@ -62,10 +58,6 @@ pub struct Options {
     #[clap(short, conflicts_with("quiet"), action = ArgAction::Count)]
     verbose: u8,
 
-    /// Do not spawn an initial window.
-    #[clap(long)]
-    pub daemon: bool,
-
     /// CLI options for config overrides.
     #[clap(skip)]
     pub config_options: ParsedOptions,
@@ -73,10 +65,6 @@ pub struct Options {
     /// Options which can be passed via IPC.
     #[clap(flatten)]
     pub window_options: WindowOptions,
-
-    /// Subcommand passed to the CLI.
-    #[clap(subcommand)]
-    pub subcommands: Option<Subcommands>,
 }
 
 impl Options {
@@ -96,10 +84,8 @@ impl Options {
             config.ipc_socket = Some(true);
         }
 
-        config.window.embed = self.embed.as_ref().and_then(|embed| parse_hex_or_decimal(embed));
         config.debug.print_events |= self.print_events;
         config.debug.log_level = max(config.debug.log_level, self.log_level());
-        config.debug.ref_test |= self.ref_test;
 
         if config.debug.print_events {
             config.debug.log_level = max(config.debug.log_level, LevelFilter::Info);
@@ -145,12 +131,12 @@ fn parse_class(input: &str) -> Result<Class, String> {
 }
 
 /// Convert to hex if possible, else decimal
-fn parse_hex_or_decimal(input: &str) -> Option<u32> {
-    input
-        .strip_prefix("0x")
-        .and_then(|value| u32::from_str_radix(value, 16).ok())
-        .or_else(|| input.parse().ok())
-}
+// fn parse_hex_or_decimal(input: &str) -> Option<u32> {
+//     input
+//         .strip_prefix("0x")
+//         .and_then(|value| u32::from_str_radix(value, 16).ok())
+//         .or_else(|| input.parse().ok())
+// }
 
 /// Terminal specific cli options which can be passed to new windows via IPC.
 #[derive(Serialize, Deserialize, Args, Default, Debug, Clone, PartialEq, Eq)]
@@ -231,12 +217,11 @@ impl WindowIdentity {
 }
 
 /// Available CLI subcommands.
-#[derive(Subcommand, Debug)]
-pub enum Subcommands {
-    #[cfg(unix)]
-    Msg(MessageOptions),
-    Migrate(MigrateOptions),
-}
+// #[derive(Subcommand, Debug)]
+// pub enum Subcommands {
+//     Msg(MessageOptions),
+//     Migrate(MigrateOptions),
+// }
 
 /// Send a message to the Alacritty socket.
 #[cfg(unix)]
@@ -299,11 +284,6 @@ pub struct WindowOptions {
     #[clap(flatten)]
     /// Window options which could be passed via IPC.
     pub window_identity: WindowIdentity,
-
-    #[clap(skip)]
-    #[cfg(target_os = "macos")]
-    /// The window tabbing identifier to use when building a window.
-    pub window_tabbing_id: Option<String>,
 
     #[clap(skip)]
     #[cfg(not(any(target_os = "macos", windows)))]
@@ -440,26 +420,6 @@ mod tests {
     use toml::Table;
 
     #[test]
-    fn dynamic_title_ignoring_options_by_default() {
-        let mut config = UiConfig::default();
-        let old_dynamic_title = config.window.dynamic_title;
-
-        Options::default().override_config(&mut config);
-
-        assert_eq!(old_dynamic_title, config.window.dynamic_title);
-    }
-
-    #[test]
-    fn dynamic_title_not_overridden_by_config() {
-        let mut config = UiConfig::default();
-
-        config.window.identity.title = "foo".to_owned();
-        Options::default().override_config(&mut config);
-
-        assert!(config.window.dynamic_title);
-    }
-
-    #[test]
     fn valid_option_as_value() {
         // Test with a single field.
         let value: Value = toml::from_str("field=true").unwrap();
@@ -516,23 +476,23 @@ mod tests {
         assert!(class.is_err());
     }
 
-    #[test]
-    fn valid_decimal() {
-        let value = parse_hex_or_decimal("10485773");
-        assert_eq!(value, Some(10485773));
-    }
+    // #[test]
+    // fn valid_decimal() {
+    //     let value = parse_hex_or_decimal("10485773");
+    //     assert_eq!(value, Some(10485773));
+    // }
 
-    #[test]
-    fn valid_hex_to_decimal() {
-        let value = parse_hex_or_decimal("0xa0000d");
-        assert_eq!(value, Some(10485773));
-    }
+    // #[test]
+    // fn valid_hex_to_decimal() {
+    //     let value = parse_hex_or_decimal("0xa0000d");
+    //     assert_eq!(value, Some(10485773));
+    // }
 
-    #[test]
-    fn invalid_hex_to_decimal() {
-        let value = parse_hex_or_decimal("0xa0xx0d");
-        assert_eq!(value, None);
-    }
+    // #[test]
+    // fn invalid_hex_to_decimal() {
+    //     let value = parse_hex_or_decimal("0xa0xx0d");
+    //     assert_eq!(value, None);
+    // }
 
     #[cfg(target_os = "linux")]
     #[test]

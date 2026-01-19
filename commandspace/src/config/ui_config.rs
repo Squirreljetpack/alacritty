@@ -161,12 +161,6 @@ impl UiConfig {
     pub fn live_config_reload(&self) -> bool {
         self.live_config_reload.unwrap_or(self.general.live_config_reload)
     }
-
-    #[cfg(unix)]
-    #[inline]
-    pub fn ipc_socket(&self) -> bool {
-        self.ipc_socket.unwrap_or(self.general.ipc_socket)
-    }
 }
 
 /// Keyboard configuration.

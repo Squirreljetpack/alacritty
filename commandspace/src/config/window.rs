@@ -4,10 +4,9 @@ use log::{error, warn};
 use serde::de::{self, MapAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 
-use winit::monitor::Fullscreen;
 #[cfg(target_os = "macos")]
 use winit::platform::macos::OptionAsAlt as WinitOptionAsAlt;
-use winit::window::{Theme as WinitTheme, WindowLevel as WinitWindowLevel};
+use winit::window::Theme as WinitTheme;
 
 use alacritty_config_derive::{ConfigDeserialize, SerdeReplace};
 
@@ -19,26 +18,6 @@ pub const DEFAULT_NAME: &str = "Alacritty";
 
 #[derive(ConfigDeserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct WindowConfig {
-    /// Initial position.
-    pub position: Option<Delta<i32>>,
-
-    /// Draw the window with title bar / borders.
-    pub decorations: Decorations,
-
-    /// Startup mode.
-    pub startup_mode: StartupMode,
-
-    /// XEmbed parent.
-    #[config(skip)]
-    #[serde(skip_serializing)]
-    pub embed: Option<u32>,
-
-    /// Spread out additional padding evenly.
-    pub dynamic_padding: bool,
-
-    /// Use dynamic title.
-    pub dynamic_title: bool,
-
     /// Information to identify a particular window.
     #[config(flatten)]
     pub identity: Identity,
@@ -60,45 +39,31 @@ pub struct WindowConfig {
 
     /// Initial dimensions.
     dimensions: Dimensions,
-
-    /// System decorations theme variant.
-    decorations_theme_variant: Option<Theme>,
-
-    /// Window level.
-    pub level: WindowLevel,
 }
 
 impl Default for WindowConfig {
     fn default() -> Self {
         Self {
-            dynamic_title: true,
             blur: Default::default(),
-            embed: Default::default(),
             padding: Default::default(),
             opacity: Default::default(),
-            position: Default::default(),
             identity: Default::default(),
             dimensions: Default::default(),
-            decorations: Default::default(),
-            startup_mode: Default::default(),
-            dynamic_padding: Default::default(),
             resize_increments: Default::default(),
-            decorations_theme_variant: Default::default(),
             option_as_alt: Default::default(),
-            level: Default::default(),
         }
     }
 }
 
 impl WindowConfig {
     #[inline]
-    pub fn dimensions(&self) -> Option<Dimensions> {
+    pub fn dimensions(&self) -> Dimensions {
         let (lines, columns) = (self.dimensions.lines, self.dimensions.columns);
         let (lines_is_non_zero, columns_is_non_zero) = (lines != 0, columns != 0);
 
         if lines_is_non_zero && columns_is_non_zero {
             // Return dimensions if both `lines` and `columns` are non-zero.
-            Some(self.dimensions)
+            return self.dimensions;
         } else if lines_is_non_zero || columns_is_non_zero {
             // Warn if either `columns` or `lines` is non-zero.
 
@@ -113,11 +78,8 @@ impl WindowConfig {
                 "Both `lines` and `columns` must be non-zero for `window.dimensions` to take \
                  effect. Configured value of `{zero_key}` is 0 while that of `{non_zero_key}` is {non_zero_value}",
             );
-
-            None
-        } else {
-            None
-        }
+        };
+        Dimensions { columns: 80, lines: 25 }
     }
 
     #[inline]
@@ -125,20 +87,6 @@ impl WindowConfig {
         let padding_x = (f32::from(self.padding.x) * scale_factor).floor();
         let padding_y = (f32::from(self.padding.y) * scale_factor).floor();
         (padding_x, padding_y)
-    }
-
-    #[inline]
-    pub fn fullscreen(&self) -> Option<Fullscreen> {
-        if self.startup_mode == StartupMode::Fullscreen {
-            Some(Fullscreen::Borderless(None))
-        } else {
-            None
-        }
-    }
-
-    #[inline]
-    pub fn maximized(&self) -> bool {
-        self.startup_mode == StartupMode::Maximized
     }
 
     #[cfg(target_os = "macos")]
@@ -149,10 +97,6 @@ impl WindowConfig {
             OptionAsAlt::Both => WinitOptionAsAlt::Both,
             OptionAsAlt::None => WinitOptionAsAlt::None,
         }
-    }
-
-    pub fn theme(&self) -> Option<WinitTheme> {
-        self.decorations_theme_variant.map(WinitTheme::from)
     }
 }
 
@@ -169,24 +113,6 @@ impl Default for Identity {
     fn default() -> Self {
         Self { title: DEFAULT_NAME.into(), class: Default::default() }
     }
-}
-
-#[derive(ConfigDeserialize, Serialize, Default, Debug, Copy, Clone, PartialEq, Eq)]
-pub enum StartupMode {
-    #[default]
-    Windowed,
-    Maximized,
-    Fullscreen,
-    SimpleFullscreen,
-}
-
-#[derive(ConfigDeserialize, Serialize, Default, Debug, Copy, Clone, PartialEq, Eq)]
-pub enum Decorations {
-    #[default]
-    Full,
-    Transparent,
-    Buttonless,
-    None,
 }
 
 /// Window Dimensions.
@@ -306,22 +232,6 @@ impl From<Theme> for WinitTheme {
         match theme {
             Theme::Light => WinitTheme::Light,
             Theme::Dark => WinitTheme::Dark,
-        }
-    }
-}
-
-#[derive(ConfigDeserialize, Serialize, Default, Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WindowLevel {
-    #[default]
-    Normal,
-    AlwaysOnTop,
-}
-
-impl From<WindowLevel> for WinitWindowLevel {
-    fn from(level: WindowLevel) -> Self {
-        match level {
-            WindowLevel::Normal => WinitWindowLevel::Normal,
-            WindowLevel::AlwaysOnTop => WinitWindowLevel::AlwaysOnTop,
         }
     }
 }

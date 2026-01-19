@@ -10,8 +10,6 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Instant;
 
-use glutin::config::Config as GlutinConfig;
-use glutin::display::GetGlDisplay;
 #[cfg(all(feature = "x11", not(any(target_os = "macos", windows))))]
 use glutin::platform::x11::X11GlConfigExt;
 use log::info;
@@ -39,8 +37,6 @@ use crate::event::{
     ActionContext, Event, EventLoopProxy, EventProxy, InlineSearchState, Mouse, SearchState,
     TouchPurpose, WinitEvent,
 };
-#[cfg(unix)]
-use crate::logging::LOG_TARGET_IPC_CONFIG;
 use crate::message_bar::MessageBuffer;
 use crate::scheduler::Scheduler;
 use crate::{input, renderer};
@@ -114,31 +110,24 @@ impl WindowContext {
         let gl_context =
             renderer::platform::create_gl_context(&gl_display, &gl_config, raw_window_handle)?;
 
-        let display = Display::new(window, gl_context, &config, false)?;
+        let display = Display::new(window, gl_context, &config)?;
 
         Self::new(display, config, options, proxy)
     }
 
     /// Create additional context with the graphics platform other windows are using.
     pub fn additional(
-        gl_config: &GlutinConfig,
+        gl_config: &glutin::config::Config,
         event_loop: &dyn ActiveEventLoop,
         proxy: EventLoopProxy,
         config: Rc<UiConfig>,
-        mut options: WindowOptions,
-        config_overrides: ParsedOptions,
     ) -> Result<Self, Box<dyn Error>> {
+        use glutin::display::GetGlDisplay;
         let gl_display = gl_config.display();
+        let mut options = WindowOptions::default();
 
         let mut identity = config.window.identity.clone();
         options.window_identity.override_identity_config(&mut identity);
-
-        // Check if new window will be opened as a tab.
-        // This must be done before `Window::new()`, which unsets `window_tabbing_id`.
-        #[cfg(target_os = "macos")]
-        let tabbed = options.window_tabbing_id.is_some();
-        #[cfg(not(target_os = "macos"))]
-        let tabbed = false;
 
         let window = Window::new(
             event_loop,
@@ -154,14 +143,9 @@ impl WindowContext {
         let gl_context =
             renderer::platform::create_gl_context(&gl_display, gl_config, Some(raw_window_handle))?;
 
-        let display = Display::new(window, gl_context, &config, tabbed)?;
+        let display = Display::new(window, gl_context, &config)?;
 
-        let mut window_context = Self::new(display, config, options, proxy)?;
-
-        // Set the config overrides at startup.
-        //
-        // These are already applied to `config`, so no update is necessary.
-        window_context.window_config = config_overrides;
+        let window_context = Self::new(display, config, options, proxy)?;
 
         Ok(window_context)
     }
@@ -286,12 +270,10 @@ impl WindowContext {
         }
 
         // Always reload the theme to account for auto-theme switching.
-        self.display.window.set_theme(self.config.window.theme());
 
         // Update display if either padding options or resize increments were changed.
         let window_config = &old_config.window;
         if window_config.padding(1.) != self.config.window.padding(1.)
-            || window_config.dynamic_padding != self.config.window.dynamic_padding
             || window_config.resize_increments != self.config.window.resize_increments
         {
             self.display.pending_update.dirty = true;
@@ -305,8 +287,7 @@ impl WindowContext {
         // │ N  │       Y       │              N              ││     N     │
         // │ N  │       N       │              _              ││     Y     │
         if !self.preserve_title
-            && (!self.config.window.dynamic_title
-                || self.display.window.title() == old_config.window.identity.title)
+            && (!false || self.display.window.title() == old_config.window.identity.title)
         {
             self.display.window.set_title(self.config.window.identity.title.clone());
         }
@@ -332,36 +313,6 @@ impl WindowContext {
         self.event_queue.push(event.into());
 
         self.dirty = true;
-    }
-
-    /// Get reference to the window's configuration.
-    #[cfg(unix)]
-    pub fn config(&self) -> &UiConfig {
-        &self.config
-    }
-
-    /// Clear the window config overrides.
-    #[cfg(unix)]
-    pub fn reset_window_config(&mut self, config: Rc<UiConfig>) {
-        // Clear previous window errors.
-        self.message_buffer.remove_target(LOG_TARGET_IPC_CONFIG);
-
-        self.window_config.clear();
-
-        // Reload current config to pull new IPC config.
-        self.update_config(config);
-    }
-
-    /// Add new window config overrides.
-    #[cfg(unix)]
-    pub fn add_window_config(&mut self, config: Rc<UiConfig>, options: &ParsedOptions) {
-        // Clear previous window errors.
-        self.message_buffer.remove_target(LOG_TARGET_IPC_CONFIG);
-
-        self.window_config.extend_from_slice(options);
-
-        // Reload current config to pull new IPC config.
-        self.update_config(config);
     }
 
     /// Draw the window.
@@ -500,6 +451,7 @@ impl WindowContext {
     }
 
     /// Write the ref test results to the disk.
+    #[allow(unused)]
     pub fn write_ref_test_results(&self) {
         // Dump grid state.
         let mut grid = self.terminal.lock().grid().clone();

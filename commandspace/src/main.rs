@@ -34,13 +34,10 @@ mod daemon;
 mod display;
 mod event;
 mod input;
-#[cfg(unix)]
-mod ipc;
 mod logging;
 #[cfg(target_os = "macos")]
 mod macos;
 mod message_bar;
-mod migrate;
 #[cfg(windows)]
 mod panic;
 mod renderer;
@@ -48,16 +45,16 @@ mod scheduler;
 mod string;
 mod window_context;
 
+mod global_hotkey;
+mod tray;
+mod utils;
+
 mod gl {
     #![allow(clippy::all, unsafe_op_in_unsafe_fn)]
     include!(concat!(env!("OUT_DIR"), "/gl_bindings.rs"));
 }
 
-#[cfg(unix)]
-use crate::cli::MessageOptions;
-#[cfg(not(any(target_os = "macos", windows)))]
-use crate::cli::SocketMessage;
-use crate::cli::{Options, Subcommands};
+use crate::cli::Options;
 use crate::config::UiConfig;
 use crate::config::monitor::ConfigMonitor;
 use crate::event::{EventLoopProxy, Processor};
@@ -79,45 +76,35 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Load command line options.
     let options = Options::new();
 
-    match options.subcommands {
-        #[cfg(unix)]
-        Some(Subcommands::Msg(options)) => msg(options)?,
-        Some(Subcommands::Migrate(options)) => migrate::migrate(options),
-        None => alacritty(options)?,
-    }
+    // match options.subcommands {
+    //     #[cfg(unix)]
+    //     Some(Subcommands::Msg(options)) => msg(options)?,
+    //     Some(Subcommands::Migrate(options)) => migrate::migrate(options),
+    //     None => alacritty(options)?,
+    // }
+
+    alacritty(options)?;
 
     Ok(())
 }
 
 /// `msg` subcommand entrypoint.
-#[cfg(unix)]
-#[allow(unused_mut)]
-fn msg(mut options: MessageOptions) -> Result<(), Box<dyn Error>> {
-    #[cfg(not(any(target_os = "macos", windows)))]
-    if let SocketMessage::CreateWindow(window_options) = &mut options.message {
-        window_options.activation_token =
-            env::var("XDG_ACTIVATION_TOKEN").or_else(|_| env::var("DESKTOP_STARTUP_ID")).ok();
-    }
-    ipc::send_message(options.socket, options.message).map_err(|err| err.into())
-}
+// #[cfg(unix)]
+// #[allow(unused_mut)]
+// fn msg(mut _options: MessageOptions) -> Result<(), Box<dyn Error>> {
+//     // unimplemented
+//     Ok(())
+// }
 
 /// Temporary files stored for Alacritty.
 ///
 /// This stores temporary files to automate their destruction through its `Drop` implementation.
 struct TemporaryFiles {
-    #[cfg(unix)]
-    socket_path: Option<PathBuf>,
     log_file: Option<PathBuf>,
 }
 
 impl Drop for TemporaryFiles {
     fn drop(&mut self) {
-        // Clean up the IPC socket file.
-        #[cfg(unix)]
-        if let Some(socket_path) = &self.socket_path {
-            let _ = fs::remove_file(socket_path);
-        }
-
         // Clean up logfile.
         if let Some(log_file) = &self.log_file {
             if fs::remove_file(log_file).is_ok() {
@@ -185,28 +172,16 @@ fn alacritty(mut options: Options) -> Result<(), Box<dyn Error>> {
     #[cfg(target_os = "macos")]
     macos::disable_autofill();
 
-    // Create the IPC socket listener.
-    #[cfg(unix)]
-    let socket_path = if config.ipc_socket() {
-        match ipc::spawn_ipc_socket(&options, proxy.clone()) {
-            Ok(path) => Some(path),
-            Err(err) if options.daemon => return Err(err.into()),
-            Err(err) => {
-                log::warn!("Unable to create socket: {err:?}");
-                None
-            },
-        }
-    } else {
-        None
-    };
-
     // Setup automatic RAII cleanup for our files.
     let log_cleanup = log_file.filter(|_| !config.debug.persistent_logging);
-    let _files = TemporaryFiles {
-        #[cfg(unix)]
-        socket_path,
-        log_file: log_cleanup,
-    };
+    let _files = TemporaryFiles { log_file: log_cleanup };
+
+    // hotkey manager
+    #[cfg(target_os = "macos")]
+    let _hotkey_manager =
+        global_hotkey::init_hotkeys(proxy.clone()).expect("Unable to initialize hotkeys");
+    #[cfg(not(target_os = "macos"))]
+    let _hk_thread = global_hotkey::init_hotkeys(proxy.clone());
 
     // Event processor.
     let processor = Processor::new(config, options, &window_event_loop, proxy, rx);

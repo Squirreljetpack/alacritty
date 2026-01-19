@@ -19,7 +19,7 @@ use winit::platform::wayland::WindowAttributesWayland;
 use winit::platform::windows::{WinIcon, WindowAttributesWindows};
 use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use winit::window::{
-    ImePurpose, Theme, UserAttentionType, Window as WinitWindow, WindowAttributes, WindowId,
+    ImePurpose, UserAttentionType, Window as WinitWindow, WindowAttributes, WindowId,
 };
 #[cfg(target_os = "macos")]
 use {
@@ -38,7 +38,7 @@ use alacritty_terminal::index::Point;
 
 use crate::cli::WindowOptions;
 use crate::config::UiConfig;
-use crate::config::window::{Decorations, Identity, WindowConfig};
+use crate::config::window::{Identity, WindowConfig};
 use crate::display::SizeInfo;
 
 /// Window icon for `_NET_WM_ICON` property.
@@ -141,24 +141,22 @@ impl Window {
             options.activation_token.take(),
             #[cfg(all(feature = "x11", not(any(target_os = "macos", windows))))]
             x11_visual,
-            #[cfg(target_os = "macos")]
-            &options.window_tabbing_id.take(),
         );
-
-        if let Some(position) = config.window.position {
-            window_attributes = window_attributes
-                .with_position(PhysicalPosition::<i32>::from((position.x, position.y)));
-        }
 
         window_attributes = window_attributes
             .with_title(&identity.title)
-            .with_theme(config.window.theme())
             .with_visible(false)
             .with_transparent(true)
             .with_blur(config.window.blur)
-            .with_maximized(config.window.maximized())
-            .with_fullscreen(config.window.fullscreen())
-            .with_window_level(config.window.level.into());
+            .with_window_level(winit::window::WindowLevel::AlwaysOnTop)
+            .with_decorations(false);
+
+        // #[cfg(not(target_os = "macos"))]
+        // explicitly setting this can prevent x11 from ignoring the later set_position command
+        {
+            window_attributes =
+                window_attributes.with_position(PhysicalPosition::new(0, 0)).with_active(true);
+        }
 
         let window = event_loop.create_window(window_attributes)?;
 
@@ -174,6 +172,14 @@ impl Window {
 
         // Set initial transparency hint.
         window.set_transparent(config.window_opacity() < 1.);
+
+        if let Err(e) = Self::initialize_platform_window_handle(
+            &*window,
+            #[cfg(all(feature = "x11", not(any(target_os = "macos", windows))))]
+            event_loop,
+        ) {
+            log::error!("Failed to set raw window attributes: {e}")
+        }
 
         #[cfg(target_os = "macos")]
         use_srgb_color_space(window.as_ref());
@@ -196,6 +202,130 @@ impl Window {
         })
     }
 
+    pub fn initialize_platform_window_handle(
+        window: &dyn WinitWindow,
+        #[cfg(all(feature = "x11", not(any(target_os = "macos", windows))))]
+        event_loop: &dyn ActiveEventLoop,
+    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
+        let window_handle = window.window_handle().expect("Failed to get window handle").as_raw();
+
+        match window_handle {
+            // --- macOS (AppKit) ---
+            #[cfg(target_os = "macos")]
+            RawWindowHandle::AppKit(h) => {
+                use objc2::rc::Retained;
+                use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
+
+                unsafe {
+                    let ns_view: *mut NSView = h.ns_view.as_ptr() as *mut NSView;
+                    let ns_window: Retained<NSWindow> =
+                        (*ns_view).window().expect("NSView has no window");
+
+                    let behavior = NSWindowCollectionBehavior::CanJoinAllSpaces
+                        | NSWindowCollectionBehavior::Stationary
+                        | NSWindowCollectionBehavior::Transient;
+
+                    ns_window.setCollectionBehavior(behavior);
+                }
+            },
+
+            // --- Windows (Win32) ---
+            #[cfg(target_os = "windows")]
+            RawWindowHandle::Win32(h) => {
+                use windows::Win32::Foundation::HWND;
+                use windows::Win32::UI::WindowsAndMessaging::{
+                    GWL_EXSTYLE, GetWindowLongW, SetWindowLongW, WS_EX_TOOLWINDOW,
+                };
+
+                unsafe {
+                    let hwnd = HWND(h.hwnd.get() as _);
+
+                    // WS_EX_TOOLWINDOW is the standard Win32 way to make a window
+                    // appear on all virtual desktops automatically.
+                    // Setting WS_EX_TOOLWINDOW makes the window stay on all virtual desktops
+                    // in most Windows 10/11 versions, though it removes it from the taskbar.
+                    let ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE);
+                    SetWindowLongW(hwnd, GWL_EXSTYLE, ex_style | WS_EX_TOOLWINDOW.0 as i32);
+                }
+            },
+
+            // --- X11 (Xlib Backend) ---
+            #[cfg(all(feature = "x11", not(any(target_os = "macos", windows))))]
+            RawWindowHandle::Xlib(h) => {
+                use x11rb::protocol::xproto::{AtomEnum, ConnectionExt, PropMode};
+
+                let RawDisplayHandle::Xlib(_display_h) =
+                    event_loop.display_handle().unwrap().as_raw()
+                else {
+                    unreachable!()
+                };
+
+                let (conn, _) = x11rb::connect(None)?;
+                use x11rb::connection::Connection;
+
+                let window_id = h.window as u32;
+                let reply = conn.intern_atom(false, b"_NET_WM_DESKTOP").unwrap().reply()?;
+
+                conn.change_property(
+                    PropMode::REPLACE,
+                    window_id,
+                    reply.atom,
+                    AtomEnum::CARDINAL,
+                    32,
+                    1,
+                    &0xFFFFFFFFu32.to_ne_bytes(),
+                )?;
+                conn.get_input_focus()?.reply()?; // force a server round-trip otherwise handle gets dropped too early
+                conn.flush()?;
+            },
+
+            // --- X11 (XCB Backend) ---
+            #[cfg(all(feature = "x11", not(any(target_os = "macos", windows))))]
+            RawWindowHandle::Xcb(h) => {
+                use x11rb::connection::Connection;
+                use x11rb::protocol::xproto::{AtomEnum, ConnectionExt, PropMode};
+
+                let RawDisplayHandle::Xcb(_display_h) =
+                    event_loop.display_handle().unwrap().as_raw()
+                else {
+                    unreachable!()
+                };
+
+                let (conn, _) = x11rb::connect(None)?;
+
+                let window_id = h.window.get();
+                let reply = conn.intern_atom(false, b"_NET_WM_DESKTOP").unwrap().reply()?;
+
+                conn.change_property(
+                    PropMode::REPLACE,
+                    window_id,
+                    reply.atom,
+                    AtomEnum::CARDINAL,
+                    32,
+                    1,
+                    &0xFFFFFFFFu32.to_ne_bytes(),
+                )?;
+                conn.get_input_focus()?.reply()?; // force a server round-trip otherwise handle gets dropped too early
+                conn.flush()?;
+            },
+
+            // --- Wayland ---
+            #[cfg(all(feature = "wayland", not(any(target_os = "macos", windows))))]
+            RawWindowHandle::Wayland(_h) => {
+                // Wayland is more restrictive. Most compositors do not allow a client
+                // to decide to be on all workspaces for security and design reasons.
+                // Specialized components usually require the Layer Shell protocol.
+            },
+
+            _ => {
+                log::error!(
+                    "Sticky behavior not implemented or supported for this platform/backend."
+                );
+            },
+        }
+        Ok(())
+    }
+
     #[inline]
     pub fn raw_window_handle(&self) -> RawWindowHandle {
         self.window.window_handle().unwrap().as_raw()
@@ -207,6 +337,17 @@ impl Window {
     }
 
     #[inline]
+    pub fn set_position(&self, position: impl Into<winit::dpi::Position>) {
+        self.window.set_outer_position(position.into())
+    }
+
+    #[allow(dead_code)]
+    #[inline]
+    pub fn outer_position(&self) -> Option<PhysicalPosition<i32>> {
+        self.window.outer_position().ok()
+    }
+
+    #[inline]
     pub fn inner_size(&self) -> PhysicalSize<u32> {
         self.window.surface_size()
     }
@@ -214,12 +355,10 @@ impl Window {
     #[inline]
     pub fn set_visible(&self, visibility: bool) {
         self.window.set_visible(visibility);
-    }
-
-    #[cfg(target_os = "macos")]
-    #[inline]
-    pub fn focus_window(&self) {
-        self.window.focus_window();
+        // todo: check if this should be universally set in ::Occluded
+        if visibility {
+            self.window.focus_window();
+        }
     }
 
     /// Set the window title.
@@ -227,6 +366,22 @@ impl Window {
     pub fn set_title(&mut self, title: String) {
         self.title = title;
         self.window.set_title(&self.title);
+    }
+
+    #[inline]
+    pub fn focus(&self) {
+        self.window.focus_window();
+    }
+
+    #[allow(dead_code)]
+    #[inline]
+    pub fn has_focus(&self) -> bool {
+        self.window.has_focus()
+    }
+    #[allow(dead_code)]
+    #[inline]
+    pub fn is_visible(&self) -> Option<bool> {
+        self.window.is_visible()
     }
 
     /// Get the window title.
@@ -305,7 +460,7 @@ impl Window {
     #[cfg(all(feature = "wayland", not(any(target_os = "macos", windows))))]
     fn get_wayland_window_attributes(
         identity: &Identity,
-        window_config: &WindowConfig,
+        _window_config: &WindowConfig,
         activation_token: Option<ActivationToken>,
     ) -> WindowAttributes {
         let mut attrs = WindowAttributesWayland::default()
@@ -315,18 +470,18 @@ impl Window {
             attrs = attrs.with_activation_token(activation_token);
         }
 
-        WindowAttributes::default()
-            .with_decorations(window_config.decorations != Decorations::None)
-            .with_platform_attributes(Box::new(attrs))
+        WindowAttributes::default().with_platform_attributes(Box::new(attrs))
     }
 
     #[cfg(all(feature = "x11", not(any(target_os = "macos", windows))))]
     fn get_x11_window_attributes(
         identity: &Identity,
-        window_config: &WindowConfig,
+        _window_config: &WindowConfig,
         activation_token: Option<ActivationToken>,
         x11_visual: Option<X11VisualInfo>,
     ) -> WindowAttributes {
+        use winit::platform::x11::WindowType;
+
         let mut decoder = png::Decoder::new(Cursor::new(WINDOW_ICON));
         decoder.set_transformations(png::Transformations::normalize_to_color8());
         let mut reader = decoder.read_info().expect("invalid embedded icon");
@@ -338,19 +493,17 @@ impl Window {
             .into();
 
         let mut attrs = WindowAttributesX11::default()
-            .with_x11_visual(x11_visual.unwrap().visual_id() as _)
-            .with_name(&identity.class.general, &identity.class.instance);
-
-        if let Some(embed) = window_config.embed {
-            attrs = attrs.with_embed_parent_window(embed);
-        }
+        .with_x11_visual(x11_visual.unwrap().visual_id() as _)
+        .with_name(&identity.class.general, &identity.class.instance)
+        .with_x11_window_type(vec![WindowType::Utility])
+        // .with_override_redirect(true) // this keeps it above in case we want that
+        ;
 
         if let Some(activation_token) = activation_token {
             attrs = attrs.with_activation_token(activation_token);
         }
 
         WindowAttributes::default()
-            .with_decorations(window_config.decorations != Decorations::None)
             .with_window_icon(Some(icon))
             .with_platform_attributes(Box::new(attrs))
     }
@@ -373,28 +526,11 @@ impl Window {
     pub fn get_platform_window_attributes(
         _: &Identity,
         window_config: &WindowConfig,
-        tabbing_id: &Option<String>,
     ) -> WindowAttributes {
-        let mut attrs =
-            WindowAttributesMacOS::default().with_option_as_alt(window_config.option_as_alt());
-
-        if let Some(tabbing_id) = tabbing_id {
-            attrs = attrs.with_tabbing_identifier(tabbing_id);
-        }
-
-        attrs = match window_config.decorations {
-            Decorations::Full => attrs,
-            Decorations::Transparent => attrs
-                .with_title_hidden(true)
-                .with_titlebar_transparent(true)
-                .with_fullsize_content_view(true),
-            Decorations::Buttonless => attrs
-                .with_title_hidden(true)
-                .with_titlebar_buttons_hidden(true)
-                .with_titlebar_transparent(true)
-                .with_fullsize_content_view(true),
-            Decorations::None => attrs.with_titlebar_hidden(true),
-        };
+        let attrs = WindowAttributesMacOS::default()
+            .with_option_as_alt(window_config.option_as_alt())
+            .with_titlebar_hidden(true)
+            .with_panel(true);
 
         WindowAttributes::default().with_platform_attributes(Box::new(attrs))
     }
@@ -444,10 +580,6 @@ impl Window {
     /// Should be called right before presenting to the window with e.g. `eglSwapBuffers`.
     pub fn pre_present_notify(&self) {
         self.window.pre_present_notify();
-    }
-
-    pub fn set_theme(&self, theme: Option<Theme>) {
-        self.window.set_theme(theme);
     }
 
     #[cfg(target_os = "macos")]
@@ -524,35 +656,6 @@ impl Window {
         };
 
         view.window().unwrap().setHasShadow(has_shadows);
-    }
-
-    /// Select tab at the given `index`.
-    #[cfg(target_os = "macos")]
-    pub fn select_tab_at_index(&self, index: usize) {
-        self.window.select_tab_at_index(index);
-    }
-
-    /// Select the last tab.
-    #[cfg(target_os = "macos")]
-    pub fn select_last_tab(&self) {
-        self.window.select_tab_at_index(self.window.num_tabs() - 1);
-    }
-
-    /// Select next tab.
-    #[cfg(target_os = "macos")]
-    pub fn select_next_tab(&self) {
-        self.window.select_next_tab();
-    }
-
-    /// Select previous tab.
-    #[cfg(target_os = "macos")]
-    pub fn select_previous_tab(&self) {
-        self.window.select_previous_tab();
-    }
-
-    #[cfg(target_os = "macos")]
-    pub fn tabbing_id(&self) -> String {
-        self.window.tabbing_identifier()
     }
 }
 
