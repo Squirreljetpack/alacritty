@@ -1,7 +1,8 @@
 1. Global hotkey
+
 - Toggle window
 - Restart (?)
-	- launch another program (settings)
+  - launch another program (settings)
 - Center
 - Hide on click away (toggleable)
 
@@ -10,9 +11,9 @@
 3. Task tray
 
 4. Simplify configuration
+
 - No decorations, no tabs
 
 5. Change logo/name/plists
-
 
 Where did I break in logging?

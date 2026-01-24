@@ -25,7 +25,7 @@ mod inner {
             }};
         }
 
-        let toggle = hk!(Modifiers::CONTROL, Code::Space);
+        let toggle = hk!(Modifiers::META, Code::Space);
 
         GlobalHotKeyEvent::set_event_handler(Some(move |event: GlobalHotKeyEvent| {
             if matches!(event.state, HotKeyState::Pressed) {
@@ -53,7 +53,7 @@ mod inner {
     use std::thread::JoinHandle;
 
     use winit::keyboard::ModifiersState;
-    
+
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct HotKey {
         pub mods: ModifiersState,

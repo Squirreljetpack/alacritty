@@ -295,7 +295,7 @@ impl RectRenderer {
                 attribute_offset as *const _,
             );
             gl::EnableVertexAttribArray(0);
-            attribute_offset += mem::size_of::<f32>() * 2;
+                attribute_offset += mem::size_of::<f32>() * 2;
 
             // Color.
             gl::VertexAttribPointer(

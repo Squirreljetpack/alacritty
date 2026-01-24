@@ -7,10 +7,10 @@ Table of Contents:
 1. [Feature Requests](#feature-requests)
 2. [Bug Reports](#bug-reports)
 3. [Patches / Pull Requests](#patches--pull-requests)
-    1. [Testing](#testing)
-    2. [Performance](#performance)
-    3. [Documentation](#documentation)
-    4. [Style](#style)
+   1. [Testing](#testing)
+   2. [Performance](#performance)
+   3. [Documentation](#documentation)
+   4. [Style](#style)
 4. [Release Process](#release-process)
 5. [Contact](#contact)
 
@@ -121,35 +121,37 @@ development versions, allowing us to keep the branches completely separate witho
 back into master.
 
 The exact steps for an exemplary `0.2.0` release might look like this:
-  1. Initially, the version on the latest master is `0.2.0-dev`
-  2. A new `v0.2` branch is created for the release
-  3. In the branch, the version is bumped to `0.2.0-rc1`
-  4. The new commit in the branch is tagged as `v0.2.0-rc1`
-  5. The pre-release versions are published to crates.io
-  6. A GitHub release is created for the `v0.2.0-rc1` tag
-  7. The changelog since the last release (stable or RC) is added to the GitHub release description
-  8. On master, the version is bumped to `0.3.0-dev`
-     and the `-dev` suffix is removed from the `0.2.0-dev` changelog
-  9. Bug fixes are cherry-picked from master into the branch and steps 3-7 are repeated until no
-     major issues are found in the release candidates
- 10. In the branch, the version is bumped to `0.2.0`
- 11. The new commit in the branch is tagged as `v0.2.0`
- 12. The new version is published to crates.io
- 13. A GitHub release is created for the `v0.2.0` tag
- 14. The changelog since the last stable release (**not** RC) is added to the GitHub release
-     description
+
+1. Initially, the version on the latest master is `0.2.0-dev`
+2. A new `v0.2` branch is created for the release
+3. In the branch, the version is bumped to `0.2.0-rc1`
+4. The new commit in the branch is tagged as `v0.2.0-rc1`
+5. The pre-release versions are published to crates.io
+6. A GitHub release is created for the `v0.2.0-rc1` tag
+7. The changelog since the last release (stable or RC) is added to the GitHub release description
+8. On master, the version is bumped to `0.3.0-dev`
+   and the `-dev` suffix is removed from the `0.2.0-dev` changelog
+9. Bug fixes are cherry-picked from master into the branch and steps 3-7 are repeated until no
+   major issues are found in the release candidates
+10. In the branch, the version is bumped to `0.2.0`
+11. The new commit in the branch is tagged as `v0.2.0`
+12. The new version is published to crates.io
+13. A GitHub release is created for the `v0.2.0` tag
+14. The changelog since the last stable release (**not** RC) is added to the GitHub release
+    description
 
 On master and with new planned releases, only the minor version is bumped. This makes it possible to
 create bug fix releases by incrementing the patch version of a previous minor release, without
 having to adjust the next planned release's version number.
 
 The exact steps for an exemplary `0.2.3` release might look like this:
- 1. Initially, the version on the latest master is `0.3.0-dev` and the latest release was `0.2.2`
- 2. The `v0.2` branch is checked out
- 3. All bug fixes are cherry-picked from master into the `v0.2` branch
- 4. The version is bumped to `v0.2.3-rc1` and the changelog is updated to include all fixes
- 5. Follow Steps 4-13 of the regular release's example
- 6. The release's changelog is ported back to master, removing fixes from the `0.2.3` release
+
+1. Initially, the version on the latest master is `0.3.0-dev` and the latest release was `0.2.2`
+2. The `v0.2` branch is checked out
+3. All bug fixes are cherry-picked from master into the `v0.2` branch
+4. The version is bumped to `v0.2.3-rc1` and the changelog is updated to include all fixes
+5. Follow Steps 4-13 of the regular release's example
+6. The release's changelog is ported back to master, removing fixes from the `0.2.3` release
 
 The `alacritty_terminal` crate is released in synchronization with `alacritty`, keeping the `-dev`
 and `-rcX` version suffix identical across the two crates. As soon as the new Alacritty stable

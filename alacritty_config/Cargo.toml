@@ -2,12 +2,12 @@
 name = "alacritty_config"
 version = "0.2.4-dev"
 authors = ["Christian Duerr <contact@christianduerr.com>"]
-license = "MIT OR Apache-2.0"
-description = "Alacritty configuration abstractions"
-homepage = "https://alacritty.org"
-repository = "https://github.com/alacritty/alacritty"
 edition.workspace = true
+homepage = "https://alacritty.org"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/alacritty/alacritty"
 rust-version.workspace = true
+description = "Alacritty configuration abstractions"
 
 [dependencies]
 log = { version = "0.4.17", features = ["serde"] }
