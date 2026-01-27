@@ -2,6 +2,7 @@
 
 use std::fmt::{self, Debug, Display};
 
+use alacritty_config_derive::{ConfigDeserialize, SerdeReplace};
 use bitflags::bitflags;
 use serde::de::{self, Error as SerdeError, MapAccess, Unexpected, Visitor};
 use serde::{Deserialize, Deserializer};
@@ -12,8 +13,6 @@ use winit::keyboard::{
     Key, KeyCode, KeyLocation as WinitKeyLocation, ModifiersState, NamedKey, PhysicalKey,
 };
 use winit::platform::scancode::PhysicalKeyExtScancode;
-
-use alacritty_config_derive::{ConfigDeserialize, SerdeReplace};
 
 use alacritty_terminal::term::TermMode;
 use alacritty_terminal::vi_mode::ViMotion;
@@ -115,6 +114,9 @@ pub enum Action {
     #[config(skip)]
     Mouse(MouseAction),
 
+    #[config(skip)]
+    Window(WindowAction),
+
     /// Paste contents of system clipboard.
     Paste,
 
@@ -163,75 +165,6 @@ pub enum Action {
     /// Clear the display buffer(s) to remove history.
     ClearHistory,
 
-    /// Hide the Alacritty window.
-    Hide,
-
-    /// Hide all windows other than Alacritty on macOS.
-    HideOtherApplications,
-
-    /// Minimize the Alacritty window.
-    Minimize,
-
-    /// Quit Alacritty.
-    Quit,
-
-    /// Clear warning and error notices.
-    ClearLogNotice,
-
-    /// Spawn a new instance of Alacritty.
-    SpawnNewInstance,
-
-    /// Select next tab.
-    SelectNextTab,
-
-    /// Select previous tab.
-    SelectPreviousTab,
-
-    /// Select the first tab.
-    SelectTab1,
-
-    /// Select the second tab.
-    SelectTab2,
-
-    /// Select the third tab.
-    SelectTab3,
-
-    /// Select the fourth tab.
-    SelectTab4,
-
-    /// Select the fifth tab.
-    SelectTab5,
-
-    /// Select the sixth tab.
-    SelectTab6,
-
-    /// Select the seventh tab.
-    SelectTab7,
-
-    /// Select the eighth tab.
-    SelectTab8,
-
-    /// Select the ninth tab.
-    SelectTab9,
-
-    /// Select the last tab.
-    SelectLastTab,
-
-    /// Create a new Alacritty window.
-    CreateNewWindow,
-
-    /// Create new window in a tab.
-    CreateNewTab,
-
-    /// Toggle fullscreen.
-    ToggleFullscreen,
-
-    /// Toggle maximized.
-    ToggleMaximized,
-
-    /// Toggle simple fullscreen on macOS.
-    ToggleSimpleFullscreen,
-
     /// Clear active selection.
     ClearSelection,
 
@@ -246,6 +179,9 @@ pub enum Action {
 
     /// Start a backward buffer search.
     SearchBackward,
+
+    /// Clear warning and error notices.
+    ClearLogNotice,
 
     /// No action.
     None,
@@ -278,6 +214,12 @@ impl From<SearchAction> for Action {
 impl From<MouseAction> for Action {
     fn from(action: MouseAction) -> Self {
         Self::Mouse(action)
+    }
+}
+
+impl From<WindowAction> for Action {
+    fn from(action: WindowAction) -> Self {
+        Self::Window(action)
     }
 }
 
@@ -354,6 +296,32 @@ pub enum SearchAction {
     SearchHistoryPrevious,
     /// Go to the next regex in the search history.
     SearchHistoryNext,
+}
+
+/// Window actions.
+#[allow(clippy::enum_variant_names)]
+#[derive(ConfigDeserialize, Debug, Copy, Clone, PartialEq, Eq)]
+pub enum WindowAction {
+    /// Focus the current window.
+    Focus,
+
+    /// Hide the current window.
+    Hide,
+
+    /// Toggle the current window.
+    Toggle,
+
+    /// Cycle to the next window.
+    // Cycle,
+
+    /// Close the current window
+    Close,
+
+    /// Quit CommandSpace.
+    Quit,
+
+    /// Toggle maximized.
+    ToggleMaximized,
 }
 
 /// Mouse binding specific actions.

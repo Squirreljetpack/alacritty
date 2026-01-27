@@ -12,7 +12,7 @@ use {
 use winit::cursor::CursorIcon;
 use winit::dpi::{PhysicalPosition, PhysicalSize};
 use winit::event_loop::ActiveEventLoop;
-use winit::monitor::{Fullscreen, MonitorHandle};
+use winit::monitor::MonitorHandle;
 #[cfg(all(feature = "wayland", not(any(target_os = "macos", windows))))]
 use winit::platform::wayland::WindowAttributesWayland;
 #[cfg(windows)]
@@ -216,17 +216,20 @@ impl Window {
                 use objc2::rc::Retained;
                 use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
 
-                unsafe {
-                    let ns_view: *mut NSView = h.ns_view.as_ptr() as *mut NSView;
-                    let ns_window: Retained<NSWindow> =
-                        (*ns_view).window().expect("NSView has no window");
+                //
+                let view = unsafe {
+                    assert!(MainThreadMarker::new().is_some());
+                    handle.ns_view.cast::<NSView>().as_ref()
+                };
+                let ns_window: Retained<NSWindow> = ns_view.window().expect("NSView has no window");
 
-                    let behavior = NSWindowCollectionBehavior::CanJoinAllSpaces
-                        | NSWindowCollectionBehavior::Stationary
-                        | NSWindowCollectionBehavior::Transient;
+                let behavior = NSWindowCollectionBehavior::CanJoinAllSpaces
+                    | NSWindowCollectionBehavior::Stationary
+                    | NSWindowCollectionBehavior::Transient;
 
-                    ns_window.setCollectionBehavior(behavior);
-                }
+                ns_window.setCollectionBehavior(behavior);
+                // This prevents rendering artifacts from showing up when the window is transparent.
+                ns_window.setHasShadow(false);
             },
 
             // --- Windows (Win32) ---
@@ -553,27 +556,35 @@ impl Window {
         self.window.set_blur(blur);
     }
 
-    pub fn set_maximized(&self, maximized: bool) {
-        self.window.set_maximized(maximized);
-    }
-
-    pub fn set_minimized(&self, minimized: bool) {
-        self.window.set_minimized(minimized);
-    }
-
     pub fn set_resize_increments(&self, increments: PhysicalSize<f32>) {
         self.window.set_surface_resize_increments(Some(increments.into()));
     }
 
-    /// Toggle the window's fullscreen state.
-    pub fn toggle_fullscreen(&self) {
-        self.set_fullscreen(self.window.fullscreen().is_none());
-    }
+    // pub fn set_maximized(&self, maximized: bool) {
+    //     self.window.set_maximized(maximized);
+    // }
 
-    /// Toggle the window's maximized state.
-    pub fn toggle_maximized(&self) {
-        self.set_maximized(!self.window.is_maximized());
-    }
+    // pub fn set_minimized(&self, minimized: bool) {
+    //     self.window.set_minimized(minimized);
+    // }
+
+    // /// Toggle the window's fullscreen state.
+    // pub fn toggle_fullscreen(&self) {
+    //     self.set_fullscreen(self.window.fullscreen().is_none());
+    // }
+
+    // /// Toggle the window's maximized state.
+    // pub fn toggle_maximized(&self) {
+    //     self.set_maximized(!self.window.is_maximized());
+    // }
+
+    // pub fn set_fullscreen(&self, fullscreen: bool) {
+    //     if fullscreen {
+    //         self.window.set_fullscreen(Some(Fullscreen::Borderless(None)));
+    //     } else {
+    //         self.window.set_fullscreen(None);
+    //     }
+    // }
 
     /// Inform windowing system about presenting to the window.
     ///
@@ -590,14 +601,6 @@ impl Window {
     #[cfg(target_os = "macos")]
     pub fn set_option_as_alt(&self, option_as_alt: OptionAsAlt) {
         self.window.set_option_as_alt(option_as_alt);
-    }
-
-    pub fn set_fullscreen(&self, fullscreen: bool) {
-        if fullscreen {
-            self.window.set_fullscreen(Some(Fullscreen::Borderless(None)));
-        } else {
-            self.window.set_fullscreen(None);
-        }
     }
 
     pub fn current_monitor(&self) -> Option<MonitorHandle> {
@@ -640,22 +643,6 @@ impl Window {
             PhysicalPosition::new(nspot_x, nspot_y).into(),
             PhysicalSize::new(width, height).into(),
         );
-    }
-
-    /// Disable macOS window shadows.
-    ///
-    /// This prevents rendering artifacts from showing up when the window is transparent.
-    #[cfg(target_os = "macos")]
-    pub fn set_has_shadow(&self, has_shadows: bool) {
-        let view = match self.raw_window_handle() {
-            RawWindowHandle::AppKit(handle) => {
-                assert!(MainThreadMarker::new().is_some());
-                unsafe { handle.ns_view.cast::<NSView>().as_ref() }
-            },
-            _ => return,
-        };
-
-        view.window().unwrap().setHasShadow(has_shadows);
     }
 }
 

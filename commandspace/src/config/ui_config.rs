@@ -34,6 +34,7 @@ use crate::config::scrolling::Scrolling;
 use crate::config::selection::Selection;
 use crate::config::terminal::Terminal;
 use crate::config::window::WindowConfig;
+use crate::renderer::bg::BgConfig;
 
 /// Regex used for the default URL hint.
 #[rustfmt::skip]
@@ -88,30 +89,6 @@ pub struct UiConfig {
 
     /// Keyboard configuration.
     keyboard: Keyboard,
-
-    /// Path to a shell program to run on startup.
-    #[config(deprecated = "use terminal.shell instead")]
-    shell: Option<Program>,
-
-    /// Configuration file imports.
-    ///
-    /// This is never read since the field is directly accessed through the config's
-    /// [`toml::Value`], but still present to prevent unused field warnings.
-    #[config(deprecated = "use general.import instead")]
-    import: Option<Vec<String>>,
-
-    /// Shell startup directory.
-    #[config(deprecated = "use general.working_directory instead")]
-    working_directory: Option<PathBuf>,
-
-    /// Live config reload.
-    #[config(deprecated = "use general.live_config_reload instead")]
-    live_config_reload: Option<bool>,
-
-    /// Offer IPC through a unix socket.
-    #[cfg(unix)]
-    #[config(deprecated = "use general.ipc_socket instead")]
-    pub ipc_socket: Option<bool>,
 }
 
 impl UiConfig {
@@ -129,9 +106,10 @@ impl UiConfig {
 
     /// Derive [`PtyOptions`] from the config.
     pub fn pty_config(&self) -> PtyOptions {
-        let shell = self.terminal.shell.clone().or_else(|| self.shell.clone()).map(Into::into);
+        let shell = self.terminal.shell.clone().map(Into::into);
+        // todo: understand serdereplace, then fold home_dir default into WorkingDir wrapper struct
         let working_directory =
-            self.working_directory.clone().or_else(|| self.general.working_directory.clone());
+            self.terminal.working_directory.clone().or_else(|| std::env::home_dir());
         PtyOptions {
             working_directory,
             shell,
@@ -142,9 +120,27 @@ impl UiConfig {
         }
     }
 
+    /// Derive [`BgOptions`] from the config.
+    pub fn bg_config(&self) -> BgConfig {
+        BgConfig {
+            radius: self.window_radius(),
+            bg_color: self.colors.primary.background,
+            bg_alpha: self.window_opacity(),
+            frame_color: Default::default(),
+            frame_alpha: 0.0,
+            frame_offset: 0.0,
+            frame_thickness: 0.0,
+        }
+    }
+
     #[inline]
     pub fn window_opacity(&self) -> f32 {
         self.window.opacity.as_f32()
+    }
+
+    #[inline]
+    pub fn window_radius(&self) -> f32 {
+        self.window.radius as f32 / 50.0
     }
 
     #[inline]
@@ -159,7 +155,7 @@ impl UiConfig {
 
     #[inline]
     pub fn live_config_reload(&self) -> bool {
-        self.live_config_reload.unwrap_or(self.general.live_config_reload)
+        self.general.live_config_reload
     }
 }
 

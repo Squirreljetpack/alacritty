@@ -35,7 +35,7 @@ use alacritty_terminal::vte::ansi::{ClearMode, Handler};
 
 use crate::clipboard::Clipboard;
 use crate::config::{
-    Action, BindingMode, MouseAction, MouseEvent, SearchAction, UiConfig, ViAction,
+    Action, BindingMode, MouseAction, MouseEvent, SearchAction, UiConfig, ViAction, WindowAction,
 };
 use crate::display::hint::HintMatch;
 use crate::display::window::{ImeInhibitor, Window};
@@ -94,8 +94,7 @@ pub trait ActionContext<T: EventListener> {
     fn display(&mut self) -> &mut Display;
     fn terminal(&self) -> &Term<T>;
     fn terminal_mut(&mut self) -> &mut Term<T>;
-    fn spawn_new_instance(&mut self) {}
-    fn create_new_window(&mut self) {}
+    fn window_action(&mut self, _action: &WindowAction) {}
     fn change_font_size(&mut self, _delta: f32) {}
     fn reset_font_size(&mut self) {}
     fn pop_message(&mut self) {}
@@ -325,21 +324,8 @@ impl<T: EventListener> Execute<T> for Action {
                 let text = ctx.clipboard_mut().load(ClipboardType::Selection);
                 ctx.paste(&text, true);
             },
-            Action::ToggleFullscreen => ctx.window().toggle_fullscreen(),
-            Action::ToggleMaximized => ctx.window().toggle_maximized(),
-            #[cfg(target_os = "macos")]
-            Action::ToggleSimpleFullscreen => ctx.window().toggle_simple_fullscreen(),
-            #[cfg(target_os = "macos")]
-            Action::Hide => ctx.event_loop().hide_application(),
-            #[cfg(target_os = "macos")]
-            Action::HideOtherApplications => ctx.event_loop().hide_other_applications(),
-            #[cfg(not(target_os = "macos"))]
-            Action::Hide => ctx.window().set_visible(false),
-            Action::Minimize => ctx.window().set_minimized(true),
-            Action::Quit => {
-                ctx.window().hold = false;
-                ctx.terminal_mut().exit();
-            },
+            Action::Window(action) => ctx.window_action(action),
+
             Action::IncreaseFontSize => ctx.change_font_size(FONT_SIZE_STEP),
             Action::DecreaseFontSize => ctx.change_font_size(-FONT_SIZE_STEP),
             Action::ResetFontSize => ctx.reset_font_size(),
@@ -396,8 +382,6 @@ impl<T: EventListener> Execute<T> for Action {
             },
             Action::ClearHistory => ctx.terminal_mut().clear_screen(ClearMode::Saved),
             Action::ClearLogNotice => ctx.pop_message(),
-            Action::CreateNewWindow => ctx.create_new_window(),
-            Action::SpawnNewInstance => ctx.spawn_new_instance(),
             _ => (),
         }
     }

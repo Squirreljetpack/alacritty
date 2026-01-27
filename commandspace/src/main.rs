@@ -45,6 +45,7 @@ mod scheduler;
 mod string;
 mod window_context;
 
+mod fzl;
 mod global_hotkey;
 mod tray;
 mod utils;

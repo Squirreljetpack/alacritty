@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use serde::{Deserialize, Deserializer, Serialize, de};
 use toml::Value;
 
@@ -12,6 +14,9 @@ pub struct Terminal {
     pub osc52: SerdeOsc52,
     /// Path to a shell program to run on startup.
     pub shell: Option<Program>,
+
+    /// Default working directory.
+    pub working_directory: Option<PathBuf>,
 }
 
 #[derive(SerdeReplace, Serialize, Default, Copy, Clone, Debug, PartialEq)]

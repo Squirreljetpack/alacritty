@@ -79,11 +79,6 @@ impl Options {
 
     /// Override configuration file with options from the CLI.
     pub fn override_config(&mut self, config: &mut UiConfig) {
-        #[cfg(unix)]
-        if self.socket.is_some() {
-            config.ipc_socket = Some(true);
-        }
-
         config.debug.print_events |= self.print_events;
         config.debug.log_level = max(config.debug.log_level, self.log_level());
 

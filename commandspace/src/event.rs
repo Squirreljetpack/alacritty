@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
-use std::{env, f32, mem};
+use std::{f32, mem};
 
 use ahash::RandomState;
 use crossfont::Size as FontSize;
@@ -49,7 +49,7 @@ use alacritty_terminal::vte::ansi::NamedColor;
 use crate::cli::{Options as CliOptions, WindowOptions};
 use crate::clipboard::Clipboard;
 use crate::config::ui_config::{HintAction, HintInternalAction};
-use crate::config::{self, UiConfig};
+use crate::config::{self, UiConfig, WindowAction};
 use crate::daemon::spawn_daemon;
 use crate::display::color::Rgb;
 use crate::display::hint::HintMatch;
@@ -869,35 +869,54 @@ impl<'a, N: Notify + 'a, T: EventListener> input::ActionContext<T> for ActionCon
         self.terminal
     }
 
-    fn spawn_new_instance(&mut self) {
-        let mut env_args = env::args();
-        let alacritty = env_args.next().unwrap();
+    // fn spawn_new_instance(&mut self) {
+    //     let mut env_args = env::args();
+    //     let alacritty = env_args.next().unwrap();
 
-        let mut args: Vec<String> = Vec::new();
+    //     let mut args: Vec<String> = Vec::new();
 
-        // Reuse the arguments passed to Alacritty for the new instance.
-        #[allow(clippy::while_let_on_iterator)]
-        while let Some(arg) = env_args.next() {
-            // New instances shouldn't inherit command.
-            if arg == "-e" || arg == "--command" {
-                break;
-            }
+    //     // Reuse the arguments passed to Alacritty for the new instance.
+    //     #[allow(clippy::while_let_on_iterator)]
+    //     while let Some(arg) = env_args.next() {
+    //         // New instances shouldn't inherit command.
+    //         if arg == "-e" || arg == "--command" {
+    //             break;
+    //         }
 
-            // On unix, the working directory of the foreground shell is used by `start_daemon`.
-            #[cfg(not(windows))]
-            if arg == "--working-directory" {
-                let _ = env_args.next();
-                continue;
-            }
+    //         // On unix, the working directory of the foreground shell is used by `start_daemon`.
+    //         #[cfg(not(windows))]
+    //         if arg == "--working-directory" {
+    //             let _ = env_args.next();
+    //             continue;
+    //         }
 
-            args.push(arg);
+    //         args.push(arg);
+    //     }
+
+    //     self.spawn_daemon(&alacritty, &args);
+    // }
+
+    fn window_action(&mut self, action: &WindowAction) {
+        match action {
+            WindowAction::Close => {
+                let _ = self.event_proxy.send_event(Event::new(EventType::CreateWindow, None));
+            },
+            WindowAction::Focus => {
+                let _ = self.event_proxy.send_event(Event::new(EventType::CreateWindow, None));
+            },
+            WindowAction::Hide => {
+                let _ = self.event_proxy.send_event(Event::new(EventType::CreateWindow, None));
+            },
+            WindowAction::Quit => {
+                let _ = self.event_proxy.send_event(Event::new(EventType::CreateWindow, None));
+            },
+            WindowAction::Toggle => {
+                let _ = self.event_proxy.send_event(Event::new(EventType::CreateWindow, None));
+            },
+            WindowAction::ToggleMaximized => {
+                let _ = self.event_proxy.send_event(Event::new(EventType::CreateWindow, None));
+            },
         }
-
-        self.spawn_daemon(&alacritty, &args);
-    }
-
-    fn create_new_window(&mut self) {
-        let _ = self.event_proxy.send_event(Event::new(EventType::CreateWindow, None));
     }
 
     fn spawn_daemon<I, S>(&self, program: &str, args: I)

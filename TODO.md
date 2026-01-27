@@ -17,3 +17,10 @@
 5. Change logo/name/plists
 
 Where did I break in logging?
+
+
+Config
+- for now, lets put all new options into general
+- command: 
+
+replace clear with shader

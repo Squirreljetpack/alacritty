@@ -20,9 +20,11 @@ use crate::display::SizeInfo;
 use crate::display::color::Rgb;
 use crate::display::content::RenderableCell;
 use crate::gl;
+use crate::renderer::bg::{BgConfig, BgRenderer};
 use crate::renderer::rects::{RectRenderer, RenderRect};
 use crate::renderer::shader::ShaderError;
 
+pub mod bg;
 pub mod platform;
 pub mod rects;
 mod shader;
@@ -89,6 +91,7 @@ enum TextRendererProvider {
 pub struct Renderer {
     text_renderer: TextRendererProvider,
     rect_renderer: RectRenderer,
+    bg_renderer: BgRenderer,
     robustness: bool,
 }
 
@@ -150,15 +153,17 @@ impl Renderer {
             None => (shader_version.as_ref() >= "3.3" && !is_gles_context, true),
         };
 
-        let (text_renderer, rect_renderer) = if use_glsl3 {
+        let (text_renderer, rect_renderer, bg_renderer) = if use_glsl3 {
             let text_renderer = TextRendererProvider::Glsl3(Glsl3Renderer::new()?);
             let rect_renderer = RectRenderer::new(ShaderVersion::Glsl3)?;
-            (text_renderer, rect_renderer)
+            let bg_renderer = BgRenderer::new(ShaderVersion::Glsl3)?;
+            (text_renderer, rect_renderer, bg_renderer)
         } else {
             let text_renderer =
                 TextRendererProvider::Gles2(Gles2Renderer::new(allow_dsb, is_gles_context)?);
             let rect_renderer = RectRenderer::new(ShaderVersion::Gles2)?;
-            (text_renderer, rect_renderer)
+            let bg_renderer = BgRenderer::new(ShaderVersion::Gles2)?;
+            (text_renderer, rect_renderer, bg_renderer)
         };
 
         // Enable debug logging for OpenGL as well.
@@ -171,7 +176,7 @@ impl Renderer {
             }
         }
 
-        Ok(Self { text_renderer, rect_renderer, robustness })
+        Ok(Self { text_renderer, rect_renderer, bg_renderer, robustness })
     }
 
     pub fn draw_cells<I: Iterator<Item = RenderableCell>>(
@@ -265,15 +270,19 @@ impl Renderer {
     }
 
     /// Fill the window with `color` and `alpha`.
-    pub fn clear(&self, color: Rgb, alpha: f32) {
+    pub fn clear(&self, size_info: &SizeInfo, info: &BgConfig) {
         unsafe {
-            gl::ClearColor(
-                (f32::from(color.r) / 255.0).min(1.0) * alpha,
-                (f32::from(color.g) / 255.0).min(1.0) * alpha,
-                (f32::from(color.b) / 255.0).min(1.0) * alpha,
-                alpha,
-            );
+            // Remove padding from viewport.
+            gl::Viewport(0, 0, size_info.width() as i32, size_info.height() as i32);
+            gl::BlendFuncSeparate(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA, gl::SRC_ALPHA, gl::ONE);
+
+            gl::ClearColor(0.0, 0.0, 0.0, 0.0);
             gl::Clear(gl::COLOR_BUFFER_BIT);
+        }
+        self.bg_renderer.draw(info);
+        unsafe {
+            gl::BlendFunc(gl::SRC1_COLOR, gl::ONE_MINUS_SRC1_COLOR);
+            self.set_viewport(size_info);
         }
     }
 

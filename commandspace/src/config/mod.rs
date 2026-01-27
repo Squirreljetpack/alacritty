@@ -32,6 +32,7 @@ use crate::cli::Options;
 pub use crate::config::bindings::Binding;
 pub use crate::config::bindings::{
     Action, BindingKey, BindingMode, KeyBinding, MouseAction, MouseEvent, SearchAction, ViAction,
+    WindowAction,
 };
 pub use crate::config::ui_config::UiConfig;
 use crate::logging::LOG_TARGET_CONFIG;

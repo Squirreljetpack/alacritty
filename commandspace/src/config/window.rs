@@ -25,6 +25,9 @@ pub struct WindowConfig {
     /// Background opacity from 0.0 to 1.0.
     pub opacity: Percentage,
 
+    /// Radius size in pixels.
+    pub radius: u16,
+
     /// Request blur behind the window.
     pub blur: bool,
 
@@ -46,6 +49,7 @@ impl Default for WindowConfig {
         Self {
             blur: Default::default(),
             padding: Default::default(),
+            radius: 5,
             opacity: Default::default(),
             identity: Default::default(),
             dimensions: Default::default(),
