@@ -46,13 +46,13 @@ pub struct Options {
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct Shell {
     /// Path to a shell program to run on startup.
-    pub(crate) program: String,
+    pub(crate) program: PathBuf,
     /// Arguments passed to shell.
     pub(crate) args: Vec<String>,
 }
 
 impl Shell {
-    pub fn new(program: String, args: Vec<String>) -> Self {
+    pub fn new(program: PathBuf, args: Vec<String>) -> Self {
         Self { program, args }
     }
 }

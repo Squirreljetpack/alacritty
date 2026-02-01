@@ -20,6 +20,7 @@ tasks:
   - rustup: |
       curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable --profile minimal
   - test: |
+  
       cd alacritty
       cargo test
   - oldstable: |

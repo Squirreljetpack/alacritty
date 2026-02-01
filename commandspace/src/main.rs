@@ -13,11 +13,12 @@
 compile_error!(r#"at least one of the "x11"/"wayland" features must be enabled"#);
 
 use std::error::Error;
-use std::fmt::Write as _;
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::{env, fs};
 
+use cli_boilerplate_automation::bait::ResultExt;
+use cli_boilerplate_automation::bog;
 use log::info;
 #[cfg(windows)]
 use windows_sys::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole};
@@ -40,6 +41,7 @@ mod macos;
 mod message_bar;
 #[cfg(windows)]
 mod panic;
+// mod rdev;
 mod renderer;
 mod scheduler;
 mod string;
@@ -47,8 +49,11 @@ mod window_context;
 
 mod fzl;
 mod global_hotkey;
+mod paths;
 mod tray;
 mod utils;
+
+mod config_monitor;
 
 mod gl {
     #![allow(clippy::all, unsafe_op_in_unsafe_fn)]
@@ -56,8 +61,8 @@ mod gl {
 }
 
 use crate::cli::Options;
-use crate::config::UiConfig;
-use crate::config::monitor::ConfigMonitor;
+use crate::config::global_bindings::GlobalBindings;
+use crate::config_monitor::ConfigMonitor;
 use crate::event::{EventLoopProxy, Processor};
 #[cfg(target_os = "macos")]
 use crate::macos::locale;
@@ -75,7 +80,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     // Load command line options.
-    let options = Options::new();
+    let options = <Options as clap::Parser>::parse();
 
     // match options.subcommands {
     //     #[cfg(unix)]
@@ -128,8 +133,10 @@ fn alacritty(mut options: Options) -> Result<(), Box<dyn Error>> {
     // Initialize the logger as soon as possible as to capture output from other subsystems.
     let log_file =
         logging::initialize(&options, proxy.clone()).expect("Unable to initialize logger");
+    bog::init_bogger(true, false);
+    bog::init_filter(options.bog_level());
 
-    info!("Welcome to Alacritty");
+    info!("Welcome to Commandspace");
     info!("Version {}", env!("VERSION"));
 
     #[cfg(all(feature = "x11", not(any(target_os = "macos", windows))))]
@@ -148,8 +155,7 @@ fn alacritty(mut options: Options) -> Result<(), Box<dyn Error>> {
     info!("Running on Wayland");
 
     // Load configuration file.
-    let config = config::load(&mut options);
-    log_config_path(&config);
+    let (config, _general_cfg) = cli::config::load(&mut options);
 
     // Update the log level from config.
     log::set_max_level(config.debug.log_level);
@@ -178,11 +184,10 @@ fn alacritty(mut options: Options) -> Result<(), Box<dyn Error>> {
     let _files = TemporaryFiles { log_file: log_cleanup };
 
     // hotkey manager
-    #[cfg(target_os = "macos")]
     let _hotkey_manager =
-        global_hotkey::init_hotkeys(proxy.clone()).expect("Unable to initialize hotkeys");
-    #[cfg(not(target_os = "macos"))]
-    let _hk_thread = global_hotkey::init_hotkeys(proxy.clone());
+        global_hotkey::init_hotkeys(GlobalBindings::default_binds(), proxy.clone())
+            .prefix("Unable to initialize hotkeys")
+            ._elog();
 
     // Event processor.
     let processor = Processor::new(config, options, &window_event_loop, proxy, rx);
@@ -193,17 +198,4 @@ fn alacritty(mut options: Options) -> Result<(), Box<dyn Error>> {
     info!("Goodbye");
 
     result
-}
-
-fn log_config_path(config: &UiConfig) {
-    if config.config_paths.is_empty() {
-        return;
-    }
-
-    let mut msg = String::from("Configuration files loaded from:");
-    for path in &config.config_paths {
-        let _ = write!(msg, "\n  {:?}", path.display());
-    }
-
-    info!("{msg}");
 }

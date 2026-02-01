@@ -1,1 +1,3 @@
 target
+
+# tests/**/*, .github, *.md, Makefile, .builds, Cargo.toml

@@ -1,4 +1,7 @@
-use crate::event::{Event, EventLoopProxy};
+use crate::{
+    config::action::WindowAction,
+    event::{Event, EventLoopProxy},
+};
 use alacritty_terminal::event::Event as TerminalEvent;
 use thiserror::Error;
 use tray_icon::{
@@ -57,8 +60,10 @@ pub fn set_handler(event_proxy: EventLoopProxy, ids: MenuIds) {
     MenuEvent::set_event_handler(Some(move |event: MenuEvent| {
         log::trace!("Received Menu Event {}.", event.id().0);
         if event.id == &toggle {
-            let _ =
-                event_proxy.send_event(Event::new(crate::event::EventType::ShowWindow(None), None));
+            let _ = event_proxy.send_event(Event::new(
+                crate::event::EventType::Window(WindowAction::ToggleMaximized),
+                None,
+            ));
         } else if event.id == &settings {
             // let _ =
             //     event_proxy.send_event(Event::new(crate::event::EventType::ShowWindow(None), None));

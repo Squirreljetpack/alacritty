@@ -1,92 +1,54 @@
+// ==================================================
 //! Serde helpers.
 
-use toml::{Table, Value};
+use log::error;
+use serde::{Deserialize, Deserializer};
 
-/// Merge two serde structures.
-///
-/// This will take all values from `replacement` and use `base` whenever a value isn't present in
-/// `replacement`.
-pub fn merge(base: Value, replacement: Value) -> Value {
-    match (base, replacement) {
-        (Value::Array(mut base), Value::Array(mut replacement)) => {
-            base.append(&mut replacement);
-            Value::Array(base)
-        },
-        (Value::Table(base), Value::Table(replacement)) => {
-            Value::Table(merge_tables(base, replacement))
-        },
-        (_, value) => value,
+use crate::config::{LOG_TARGET_CONFIG, bindings::Binding};
+pub(crate) struct StringVisitor;
+impl serde::de::Visitor<'_> for StringVisitor {
+    type Value = String;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("a string")
+    }
+
+    fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        Ok(s.to_lowercase())
     }
 }
 
-/// Merge two key/value tables.
-fn merge_tables(mut base: Table, replacement: Table) -> Table {
-    for (key, value) in replacement {
-        let value = match base.remove(&key) {
-            Some(base_value) => merge(base_value, value),
-            None => value,
-        };
-        base.insert(key, value);
+pub fn deserialize_bindings<'a, D, T>(
+    deserializer: D,
+    mut default: Vec<Binding<T>>,
+) -> Result<Vec<Binding<T>>, D::Error>
+where
+    D: Deserializer<'a>,
+    T: Clone + Eq,
+    Binding<T>: Deserialize<'a>,
+{
+    let values = Vec::<toml::Value>::deserialize(deserializer)?;
+
+    // Skip all invalid values.
+    let mut bindings = Vec::with_capacity(values.len());
+    for value in values {
+        match Binding::<T>::deserialize(value) {
+            Ok(binding) => bindings.push(binding),
+            Err(err) => {
+                error!(target: LOG_TARGET_CONFIG, "Config error: {err}; ignoring binding");
+            },
+        }
     }
 
-    base
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn merge_primitive() {
-        let base = Value::Table(Table::new());
-        let replacement = Value::Boolean(true);
-        assert_eq!(merge(base, replacement.clone()), replacement);
-
-        let base = Value::Boolean(false);
-        let replacement = Value::Boolean(true);
-        assert_eq!(merge(base, replacement.clone()), replacement);
-
-        let base = Value::Integer(0.into());
-        let replacement = Value::Integer(1.into());
-        assert_eq!(merge(base, replacement.clone()), replacement);
-
-        let base = Value::String(String::new());
-        let replacement = Value::String(String::from("test"));
-        assert_eq!(merge(base, replacement.clone()), replacement);
-
-        let base = Value::Table(Table::new());
-        let replacement = Value::Table(Table::new());
-        assert_eq!(merge(base.clone(), replacement), base);
+    // Remove matching default bindings.
+    for binding in bindings.iter() {
+        default.retain(|b| !b.triggers_match(binding));
     }
 
-    #[test]
-    fn merge_sequence() {
-        let base = Value::Array(vec![Value::Table(Table::new())]);
-        let replacement = Value::Array(vec![Value::Boolean(true)]);
-        let expected = Value::Array(vec![Value::Table(Table::new()), Value::Boolean(true)]);
-        assert_eq!(merge(base, replacement), expected);
-    }
+    bindings.extend(default);
 
-    #[test]
-    fn merge_tables() {
-        let mut base_table = Table::new();
-        base_table.insert(String::from("a"), Value::Boolean(true));
-        base_table.insert(String::from("b"), Value::Boolean(false));
-        let base = Value::Table(base_table);
-
-        let mut replacement_table = Table::new();
-        replacement_table.insert(String::from("a"), Value::Boolean(true));
-        replacement_table.insert(String::from("c"), Value::Boolean(false));
-        let replacement = Value::Table(replacement_table);
-
-        let merged = merge(base, replacement);
-
-        let mut expected_table = Table::new();
-        expected_table.insert(String::from("b"), Value::Boolean(false));
-        expected_table.insert(String::from("a"), Value::Boolean(true));
-        expected_table.insert(String::from("c"), Value::Boolean(false));
-        let expected = Value::Table(expected_table);
-
-        assert_eq!(merged, expected);
-    }
+    Ok(bindings)
 }

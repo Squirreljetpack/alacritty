@@ -28,9 +28,9 @@ use alacritty_terminal::term::test::TermSize;
 use alacritty_terminal::term::{Term, TermMode};
 use alacritty_terminal::tty;
 
-use crate::cli::{ParsedOptions, WindowOptions};
+use crate::cli::WindowOptions;
 use crate::clipboard::Clipboard;
-use crate::config::UiConfig;
+use crate::config::AlacrittyConfig;
 use crate::display::Display;
 use crate::display::window::Window;
 use crate::event::{
@@ -62,22 +62,20 @@ pub struct WindowContext {
     master_fd: RawFd,
     #[cfg(not(windows))]
     shell_pid: u32,
-    window_config: ParsedOptions,
-    config: Rc<UiConfig>,
+    config: Rc<AlacrittyConfig>,
 }
-
+// note that we use the default value for window_identity so options param can be regarded as noop
 impl WindowContext {
     /// Create initial window context that does bootstrapping the graphics API we're going to use.
     pub fn initial(
         event_loop: &dyn ActiveEventLoop,
         proxy: EventLoopProxy,
-        config: Rc<UiConfig>,
+        config: Rc<AlacrittyConfig>,
         mut options: WindowOptions,
     ) -> Result<Self, Box<dyn Error>> {
         let raw_display_handle = event_loop.display_handle().unwrap().as_raw();
 
-        let mut identity = config.window.identity.clone();
-        options.window_identity.override_identity_config(&mut identity);
+        let identity = config.window.identity.clone();
 
         // Windows has different order of GL platform initialization compared to any other platform;
         // it requires the window first.
@@ -120,14 +118,13 @@ impl WindowContext {
         gl_config: &glutin::config::Config,
         event_loop: &dyn ActiveEventLoop,
         proxy: EventLoopProxy,
-        config: Rc<UiConfig>,
+        config: Rc<AlacrittyConfig>,
     ) -> Result<Self, Box<dyn Error>> {
         use glutin::display::GetGlDisplay;
         let gl_display = gl_config.display();
         let mut options = WindowOptions::default();
 
-        let mut identity = config.window.identity.clone();
-        options.window_identity.override_identity_config(&mut identity);
+        let identity = config.window.identity.clone();
 
         let window = Window::new(
             event_loop,
@@ -153,14 +150,14 @@ impl WindowContext {
     /// Create a new terminal window context.
     fn new(
         display: Display,
-        config: Rc<UiConfig>,
+        config: Rc<AlacrittyConfig>,
         options: WindowOptions,
         proxy: EventLoopProxy,
     ) -> Result<Self, Box<dyn Error>> {
         let mut pty_config = config.pty_config();
         options.terminal_options.override_pty_config(&mut pty_config);
 
-        let preserve_title = options.window_identity.title.is_some();
+        let preserve_title = false;
 
         info!(
             "PTY dimensions: {:?} x {:?}",
@@ -232,7 +229,6 @@ impl WindowContext {
             prev_bell_cmd: Default::default(),
             inline_search_state: Default::default(),
             message_buffer: Default::default(),
-            window_config: Default::default(),
             search_state: Default::default(),
             event_queue: Default::default(),
             modifiers: Default::default(),
@@ -244,11 +240,8 @@ impl WindowContext {
     }
 
     /// Update the terminal window to the latest config.
-    pub fn update_config(&mut self, new_config: Rc<UiConfig>) {
+    pub fn update_config(&mut self, new_config: Rc<AlacrittyConfig>) {
         let old_config = mem::replace(&mut self.config, new_config);
-
-        // Apply ipc config if there are overrides.
-        self.config = self.window_config.override_config_rc(self.config.clone());
 
         self.display.update_config(&self.config);
         self.terminal.lock().set_options(self.config.term_options());
@@ -349,8 +342,6 @@ impl WindowContext {
     /// Process events for this terminal window.
     pub fn handle_event(
         &mut self,
-        #[cfg(target_os = "macos")] event_loop: &dyn ActiveEventLoop,
-        event_proxy: &EventLoopProxy,
         clipboard: &mut Clipboard,
         scheduler: &mut Scheduler,
         event: WinitEvent,
@@ -394,9 +385,6 @@ impl WindowContext {
             shell_pid: self.shell_pid,
             preserve_title: self.preserve_title,
             config: &self.config,
-            event_proxy,
-            #[cfg(target_os = "macos")]
-            event_loop,
             clipboard,
             scheduler,
         };
@@ -483,7 +471,7 @@ impl WindowContext {
         message_buffer: &MessageBuffer,
         search_state: &mut SearchState,
         old_is_searching: bool,
-        config: &UiConfig,
+        config: &AlacrittyConfig,
     ) {
         // Compute cursor positions before resize.
         let num_lines = terminal.screen_lines();

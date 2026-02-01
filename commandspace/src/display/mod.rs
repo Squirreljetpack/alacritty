@@ -36,7 +36,7 @@ use alacritty_terminal::term::{
 };
 use alacritty_terminal::vte::ansi::{CursorShape, NamedColor};
 
-use crate::config::UiConfig;
+use crate::config::AlacrittyConfig;
 use crate::config::debug::RendererPreference;
 use crate::config::font::Font;
 use crate::config::window::Dimensions;
@@ -402,7 +402,7 @@ impl Display {
     pub fn new(
         window: Window,
         gl_context: NotCurrentContext,
-        config: &UiConfig,
+        config: &AlacrittyConfig,
     ) -> Result<Display, Error> {
         let raw_window_handle = window.raw_window_handle();
 
@@ -630,7 +630,7 @@ impl Display {
     /// This will return a tuple of the cell width and height.
     fn update_font_size(
         glyph_cache: &mut GlyphCache,
-        config: &UiConfig,
+        config: &AlacrittyConfig,
         font: &Font,
     ) -> (f32, f32) {
         let _ = glyph_cache.update_font_size(font);
@@ -657,7 +657,7 @@ impl Display {
         pty_resize_handle: &mut dyn OnResize,
         message_buffer: &MessageBuffer,
         search_state: &mut SearchState,
-        config: &UiConfig,
+        config: &AlacrittyConfig,
     ) where
         T: EventListener,
     {
@@ -773,7 +773,7 @@ impl Display {
         mut terminal: MutexGuard<'_, Term<T>>,
         scheduler: &mut Scheduler,
         message_buffer: &MessageBuffer,
-        config: &UiConfig,
+        config: &AlacrittyConfig,
         search_state: &mut SearchState,
     ) {
         // Collect renderable content before the terminal is dropped.
@@ -1043,7 +1043,7 @@ impl Display {
     }
 
     /// Update to a new configuration.
-    pub fn update_config(&mut self, config: &UiConfig) {
+    pub fn update_config(&mut self, config: &AlacrittyConfig) {
         self.damage_tracker.debug = config.debug.highlight_damage;
         self.visual_bell.update_config(&config.bell);
         self.colors = List::from(&config.colors);
@@ -1055,7 +1055,7 @@ impl Display {
     pub fn update_highlighted_hints<T>(
         &mut self,
         term: &Term<T>,
-        config: &UiConfig,
+        config: &AlacrittyConfig,
         mouse: &Mouse,
         modifiers: ModifiersState,
     ) -> bool {
@@ -1128,7 +1128,7 @@ impl Display {
         fg: Rgb,
         bg: Rgb,
         rects: &mut Vec<RenderRect>,
-        config: &UiConfig,
+        config: &AlacrittyConfig,
     ) {
         let preedit = match self.ime.preedit() {
             Some(preedit) => preedit,
@@ -1239,7 +1239,7 @@ impl Display {
     #[inline(never)]
     fn draw_hyperlink_preview(
         &mut self,
-        config: &UiConfig,
+        config: &AlacrittyConfig,
         cursor_point: Option<Point>,
         display_offset: usize,
     ) {
@@ -1301,7 +1301,7 @@ impl Display {
 
     /// Draw current search regex.
     #[inline(never)]
-    fn draw_search(&mut self, config: &UiConfig, text: &str) {
+    fn draw_search(&mut self, config: &AlacrittyConfig, text: &str) {
         // Assure text length is at least num_cols.
         let num_cols = self.size_info.columns();
         let text = format!("{text:<num_cols$}");
@@ -1323,7 +1323,7 @@ impl Display {
 
     /// Draw render timer.
     #[inline(never)]
-    fn draw_render_timer(&mut self, config: &UiConfig) {
+    fn draw_render_timer(&mut self, config: &AlacrittyConfig) {
         if !config.debug.render_timer {
             return;
         }
@@ -1346,7 +1346,7 @@ impl Display {
     #[inline(never)]
     fn draw_line_indicator(
         &mut self,
-        config: &UiConfig,
+        config: &AlacrittyConfig,
         total_lines: usize,
         obstructed_column: Option<Column>,
         line: usize,
@@ -1602,7 +1602,7 @@ impl FrameTimer {
 ///
 /// This will return a tuple of the cell width and height.
 #[inline]
-fn compute_cell_size(config: &UiConfig, metrics: &crossfont::Metrics) -> (f32, f32) {
+fn compute_cell_size(config: &AlacrittyConfig, metrics: &crossfont::Metrics) -> (f32, f32) {
     let offset_x = f64::from(config.font.offset.x);
     let offset_y = f64::from(config.font.offset.y);
     (
@@ -1613,7 +1613,7 @@ fn compute_cell_size(config: &UiConfig, metrics: &crossfont::Metrics) -> (f32, f
 
 /// Calculate the size of the window given padding, terminal dimensions and cell size.
 fn window_size(
-    config: &UiConfig,
+    config: &AlacrittyConfig,
     dimensions: Dimensions,
     cell_width: f32,
     cell_height: f32,

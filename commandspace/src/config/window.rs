@@ -8,18 +8,16 @@ use serde::{Deserialize, Deserializer, Serialize};
 use winit::platform::macos::OptionAsAlt as WinitOptionAsAlt;
 use winit::window::Theme as WinitTheme;
 
-use alacritty_config_derive::{ConfigDeserialize, SerdeReplace};
-
-use crate::config::LOG_TARGET_CONFIG;
-use crate::config::ui_config::{Delta, Percentage};
+use super::LOG_TARGET_CONFIG;
+use super::types::{Delta, Percentage};
 
 /// Default Alacritty name, used for window title and class.
-pub const DEFAULT_NAME: &str = "Alacritty";
+pub const DEFAULT_NAME: &str = "Commandspace";
 
-#[derive(ConfigDeserialize, Serialize, Debug, Clone, PartialEq)]
+#[derive(serde::Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[serde(default)]
 pub struct WindowConfig {
     /// Information to identify a particular window.
-    #[config(flatten)]
     pub identity: Identity,
 
     /// Background opacity from 0.0 to 1.0.
@@ -104,7 +102,7 @@ impl WindowConfig {
     }
 }
 
-#[derive(ConfigDeserialize, Serialize, Debug, Clone, PartialEq, Eq)]
+#[derive(serde::Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct Identity {
     /// Window title.
     pub title: String,
@@ -122,7 +120,7 @@ impl Default for Identity {
 /// Window Dimensions.
 ///
 /// Newtype to avoid passing values incorrectly.
-#[derive(ConfigDeserialize, Serialize, Default, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(serde::Deserialize, Serialize, Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Dimensions {
     /// Window width in character columns.
     pub columns: usize,
@@ -132,7 +130,7 @@ pub struct Dimensions {
 }
 
 /// Window class hint.
-#[derive(SerdeReplace, Serialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct Class {
     pub general: String,
     pub instance: String,
@@ -181,19 +179,13 @@ impl<'de> Deserialize<'de> for Class {
                         "instance" => match String::deserialize(value) {
                             Ok(instance) => class.instance = instance,
                             Err(err) => {
-                                error!(
-                                    target: LOG_TARGET_CONFIG,
-                                    "Config error: class.instance: {err}"
-                                );
+                                error!(target: LOG_TARGET_CONFIG, "Config error: class.instance: {err}");
                             },
                         },
                         "general" => match String::deserialize(value) {
                             Ok(general) => class.general = general,
                             Err(err) => {
-                                error!(
-                                    target: LOG_TARGET_CONFIG,
-                                    "Config error: class.instance: {err}"
-                                );
+                                error!(target: LOG_TARGET_CONFIG, "Config error: class.instance: {err}");
                             },
                         },
                         key => warn!(target: LOG_TARGET_CONFIG, "Unrecognized class field: {key}"),
@@ -208,7 +200,7 @@ impl<'de> Deserialize<'de> for Class {
     }
 }
 
-#[derive(ConfigDeserialize, Serialize, Default, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(serde::Deserialize, Serialize, Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OptionAsAlt {
     /// The left `Option` key is treated as `Alt`.
     OnlyLeft,
@@ -225,7 +217,7 @@ pub enum OptionAsAlt {
 }
 
 /// System decorations theme variant.
-#[derive(ConfigDeserialize, Serialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(serde::Deserialize, Serialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Theme {
     Light,
     Dark,

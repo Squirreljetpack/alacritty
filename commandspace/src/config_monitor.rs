@@ -1,6 +1,3 @@
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
-use std::path::PathBuf;
 use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -15,6 +12,7 @@ use notify::{
 use alacritty_terminal::thread;
 
 use crate::event::{Event, EventLoopProxy, EventType};
+use crate::paths::{config_dir, config_path};
 
 const DEBOUNCE_DELAY: Duration = Duration::from_millis(10);
 
@@ -25,36 +23,10 @@ const FALLBACK_POLLING_TIMEOUT: Duration = Duration::from_secs(1);
 pub struct ConfigMonitor {
     thread: JoinHandle<()>,
     shutdown_tx: Sender<Result<NotifyEvent, NotifyError>>,
-    watched_hash: Option<u64>,
 }
 
 impl ConfigMonitor {
-    pub fn new(mut paths: Vec<PathBuf>, event_proxy: EventLoopProxy) -> Option<Self> {
-        // Don't monitor config if there is no path to watch.
-        if paths.is_empty() {
-            return None;
-        }
-
-        // Calculate the hash for the unmodified list of paths.
-        let watched_hash = Self::hash_paths(&paths);
-
-        // Exclude char devices like `/dev/null`, sockets, and so on, by checking that file type is
-        // a regular file.
-        paths.retain(|path| {
-            // Call `metadata` to resolve symbolic links.
-            path.metadata().is_ok_and(|metadata| metadata.file_type().is_file())
-        });
-
-        // Canonicalize paths, keeping the base paths for symlinks.
-        for i in 0..paths.len() {
-            if let Ok(canonical_path) = paths[i].canonicalize() {
-                match paths[i].symlink_metadata() {
-                    Ok(metadata) if metadata.file_type().is_symlink() => paths.push(canonical_path),
-                    _ => paths[i] = canonical_path,
-                }
-            }
-        }
-
+    pub fn new(event_proxy: EventLoopProxy) -> Option<Self> {
         // The Duration argument is a debouncing period.
         let (tx, rx) = mpsc::channel();
         let mut watcher = match RecommendedWatcher::new(
@@ -69,23 +41,8 @@ impl ConfigMonitor {
         };
 
         let join_handle = thread::spawn_named("config watcher", move || {
-            // Get all unique parent directories.
-            let mut parents = paths
-                .iter()
-                .map(|path| {
-                    let mut path = path.clone();
-                    path.pop();
-                    path
-                })
-                .collect::<Vec<PathBuf>>();
-            parents.sort_unstable();
-            parents.dedup();
-
-            // Watch all configuration file directories.
-            for parent in &parents {
-                if let Err(err) = watcher.watch(parent, RecursiveMode::NonRecursive) {
-                    debug!("Unable to watch config directory {parent:?}: {err}");
-                }
+            if let Err(err) = watcher.watch(&config_dir(), RecursiveMode::NonRecursive) {
+                debug!("Unable to watch config directory: {err}");
             }
 
             // The current debouncing time.
@@ -132,10 +89,10 @@ impl ConfigMonitor {
                         if received_events
                             .drain(..)
                             .flat_map(|event| event.paths.into_iter())
-                            .any(|path| paths.contains(&path))
+                            .any(|path| path == config_path())
                         {
                             // Always reload the primary configuration file.
-                            let event = Event::new(EventType::ConfigReload(paths[0].clone()), None);
+                            let event = Event::new(EventType::ConfigReload, None);
                             event_proxy.send_event(event);
                         }
                     },
@@ -150,7 +107,7 @@ impl ConfigMonitor {
             }
         });
 
-        Some(Self { watched_hash, thread: join_handle, shutdown_tx: tx })
+        Some(Self { thread: join_handle, shutdown_tx: tx })
     }
 
     /// Synchronously shut down the monitor.
@@ -164,34 +121,5 @@ impl ConfigMonitor {
         if let Err(err) = self.thread.join() {
             warn!("config monitor shutdown failed: {err:?}");
         }
-    }
-
-    /// Check if the config monitor needs to be restarted.
-    ///
-    /// This checks the supplied list of files against the monitored files to determine if a
-    /// restart is necessary.
-    pub fn needs_restart(&self, files: &[PathBuf]) -> bool {
-        Self::hash_paths(files).is_none_or(|hash| Some(hash) == self.watched_hash)
-    }
-
-    /// Generate the hash for a list of paths.
-    fn hash_paths(files: &[PathBuf]) -> Option<u64> {
-        // Use file count limit to avoid allocations.
-        const MAX_PATHS: usize = 1024;
-        if files.len() > MAX_PATHS {
-            return None;
-        }
-
-        // Sort files to avoid restart on order change.
-        let mut sorted_files = [None; MAX_PATHS];
-        for (i, file) in files.iter().enumerate() {
-            sorted_files[i] = Some(file);
-        }
-        sorted_files.sort_unstable();
-
-        // Calculate hash for the paths, regardless of order.
-        let mut hasher = DefaultHasher::new();
-        Hash::hash_slice(&sorted_files, &mut hasher);
-        Some(hasher.finish())
     }
 }

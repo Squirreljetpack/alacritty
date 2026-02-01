@@ -10,7 +10,7 @@ use std::ffi::OsStr;
 use std::fmt::Debug;
 #[cfg(not(windows))]
 use std::os::unix::io::RawFd;
-use std::path::PathBuf;
+use std::path::Path;
 use std::rc::Rc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
@@ -46,15 +46,18 @@ use alacritty_terminal::term::search::{Match, RegexSearch};
 use alacritty_terminal::term::{self, ClipboardType, Term, TermMode};
 use alacritty_terminal::vte::ansi::NamedColor;
 
+use crate::cli::config::try_load_ui_config;
 use crate::cli::{Options as CliOptions, WindowOptions};
 use crate::clipboard::Clipboard;
-use crate::config::ui_config::{HintAction, HintInternalAction};
-use crate::config::{self, UiConfig, WindowAction};
+use crate::config::AlacrittyConfig;
+use crate::config::action::WindowAction;
+use crate::config::hint::{HintAction, HintInternalAction};
 use crate::daemon::spawn_daemon;
 use crate::display::color::Rgb;
 use crate::display::hint::HintMatch;
 use crate::display::window::{ImeInhibitor, Window};
 use crate::display::{Display, Preedit, SizeInfo};
+use crate::global_hotkey::LOST_FOCUS;
 use crate::input::{self, ActionContext as _, FONT_SIZE_STEP};
 use crate::logging::{LOG_TARGET_CONFIG, LOG_TARGET_WINIT};
 use crate::message_bar::{Message, MessageBuffer};
@@ -93,13 +96,13 @@ pub struct Processor {
     user_events_rx: Receiver<Event>,
     gl_config: Option<GlutinConfig>,
     cli_options: CliOptions,
-    config: Rc<UiConfig>,
+    config: Rc<AlacrittyConfig>,
 }
 
 impl Processor {
     /// Create a new event processor.
     pub fn new(
-        config: UiConfig,
+        config: AlacrittyConfig,
         cli_options: CliOptions,
         event_loop: &EventLoop,
         proxy: EventLoopProxy,
@@ -118,10 +121,7 @@ impl Processor {
         //
         // The monitor watches the config file for changes and reloads it. Pending
         // config changes are processed in the main loop.
-        let mut config_monitor = None;
-        if config.live_config_reload() {
-            config_monitor = ConfigMonitor::new(config.config_paths.clone(), proxy.clone());
-        }
+        let config_monitor = ConfigMonitor::new(proxy.clone());
 
         Processor {
             initial_window_error: Default::default(),
@@ -301,9 +301,6 @@ impl ApplicationHandler for Processor {
         let is_redraw = matches!(event, WindowEvent::RedrawRequested);
 
         window_context.handle_event(
-            #[cfg(target_os = "macos")]
-            _event_loop,
-            &self.proxy,
             &mut self.clipboard,
             &mut self.scheduler,
             WinitEvent::WindowEvent(event),
@@ -322,7 +319,7 @@ impl ApplicationHandler for Processor {
 
             // Handle events which don't mandate the WindowId.
             match (event.payload, event.window_id.as_ref()) {
-                (EventType::ConfigReload(path), _) => {
+                (EventType::ConfigReload, _) => {
                     // Clear config logs from message bar for all terminals.
                     for window_context in self.windows.values_mut() {
                         if !window_context.message_buffer.is_empty() {
@@ -332,19 +329,8 @@ impl ApplicationHandler for Processor {
                     }
 
                     // Load config and update each terminal.
-                    if let Ok(config) = config::reload(&path, &mut self.cli_options) {
+                    if let Ok(config) = try_load_ui_config(&mut self.cli_options) {
                         self.config = Rc::new(config);
-
-                        // Restart config monitor if imports changed.
-                        if let Some(monitor) = self.config_monitor.take() {
-                            let paths = &self.config.config_paths;
-                            self.config_monitor = if monitor.needs_restart(paths) {
-                                monitor.shutdown();
-                                ConfigMonitor::new(paths.clone(), self.proxy.clone())
-                            } else {
-                                Some(monitor)
-                            };
-                        }
 
                         for window_context in self.windows.values_mut() {
                             window_context.update_config(self.config.clone());
@@ -380,20 +366,45 @@ impl ApplicationHandler for Processor {
                     }
                 },
 
-                (EventType::ShowWindow(visibility), None) => {
+                (EventType::Window(action), _) => {
                     // todo: get the current window on this display instead of the first
-                    let Some(window_context) = self.windows.values_mut().next() else {
-                        let _ = self.proxy.send_event(Event::new(EventType::CreateWindow, None));
+                    let Some((_id, window_context)) = self.windows.iter_mut().next() else {
+                        if matches!(action, WindowAction::Toggle | WindowAction::Focus) {
+                            let _ =
+                                self.proxy.send_event(Event::new(EventType::CreateWindow, None));
+                        }
                         return;
                     };
 
-                    let show = visibility.unwrap_or(
-                        !(window_context.display.visible && window_context.display.is_focused),
-                    );
-                    if show {
-                        window_context.display.show();
-                    } else {
-                        window_context.display.hide();
+                    match action {
+                        WindowAction::Focus => window_context.display.show(),
+                        WindowAction::Hide => window_context.display.hide(),
+                        WindowAction::Toggle => {
+                            let show = !window_context.display.visible
+                                || (!window_context.display.is_focused
+                                    // global_hotkey steals focus
+                                    && LOST_FOCUS.lock().take().is_none_or(|i| {
+                                        Instant::now().duration_since(i)
+                                            > Duration::from_millis(150)
+                                    }));
+                            if show {
+                                window_context.display.show()
+                            } else {
+                                window_context.display.hide()
+                            };
+                        },
+                        WindowAction::Settings => {
+                            todo!()
+                        },
+                        WindowAction::ToggleMaximized => {
+                            window_context.display.window.toggle_maximized();
+                        },
+                        WindowAction::Quit => {
+                            self.scheduler.unschedule_window(window_context.id());
+                            // let id = id.clone();
+                            // self.windows.remove(&id);
+                            self.windows.clear();
+                        },
                     }
                 },
 
@@ -412,9 +423,6 @@ impl ApplicationHandler for Processor {
                     let event = WinitEvent::UserEvent(Event::new(payload, None));
                     for window_context in self.windows.values_mut() {
                         window_context.handle_event(
-                            #[cfg(target_os = "macos")]
-                            event_loop,
-                            &self.proxy,
                             &mut self.clipboard,
                             &mut self.scheduler,
                             event.clone(),
@@ -444,20 +452,20 @@ impl ApplicationHandler for Processor {
                     // Unschedule pending events.
                     self.scheduler.unschedule_window(window_context.id());
                 },
-                (EventType::ShowWindow(visibility), Some(window_id)) => {
-                    let Some(window_context) = self.windows.get_mut(window_id) else {
-                        return;
-                    };
+                // (EventType::ShowWindow(visibility), Some(window_id)) => {
+                //     let Some(window_context) = self.windows.get_mut(window_id) else {
+                //         return;
+                //     };
 
-                    let show = visibility.unwrap_or(
-                        !(window_context.display.visible && window_context.display.is_focused),
-                    );
-                    if show {
-                        window_context.display.show();
-                    } else {
-                        window_context.display.hide();
-                    }
-                },
+                //     let show = visibility.unwrap_or(
+                //         !(window_context.display.visible && window_context.display.is_focused),
+                //     );
+                //     if show {
+                //         window_context.display.show();
+                //     } else {
+                //         window_context.display.hide();
+                //     }
+                // },
 
                 // NOTE: This event bypasses batching to minimize input latency.
                 (EventType::Frame, Some(window_id)) => {
@@ -471,9 +479,6 @@ impl ApplicationHandler for Processor {
                 (payload, Some(window_id)) => {
                     if let Some(window_context) = self.windows.get_mut(window_id) {
                         window_context.handle_event(
-                            #[cfg(target_os = "macos")]
-                            event_loop,
-                            &self.proxy,
                             &mut self.clipboard,
                             &mut self.scheduler,
                             WinitEvent::UserEvent(Event::new(payload, *window_id)),
@@ -492,9 +497,6 @@ impl ApplicationHandler for Processor {
         // Dispatch event to all windows.
         for window_context in self.windows.values_mut() {
             window_context.handle_event(
-                #[cfg(target_os = "macos")]
-                event_loop,
-                &self.proxy,
                 &mut self.clipboard,
                 &mut self.scheduler,
                 WinitEvent::AboutToWait,
@@ -561,11 +563,11 @@ impl From<Event> for WinitEvent {
 #[derive(Debug, Clone)]
 pub enum EventType {
     Terminal(TerminalEvent),
-    ConfigReload(PathBuf),
+    ConfigReload,
     Message(Message),
     Scroll(Scroll),
     CreateWindow,
-    ShowWindow(Option<bool>), // Some(bool) to set, None to toggle
+    Window(WindowAction), // Some(bool) to set, None to toggle
     BlinkCursor,
     BlinkCursorTimeout,
     SearchNext,
@@ -684,12 +686,9 @@ pub struct ActionContext<'a, N, T> {
     pub modifiers: &'a mut Modifiers,
     pub display: &'a mut Display,
     pub message_buffer: &'a mut MessageBuffer,
-    pub config: &'a UiConfig,
+    pub config: &'a AlacrittyConfig,
     pub cursor_blink_timed_out: &'a mut bool,
     pub prev_bell_cmd: &'a mut Option<Instant>,
-    #[cfg(target_os = "macos")]
-    pub event_loop: &'a dyn ActiveEventLoop,
-    pub event_proxy: &'a EventLoopProxy,
     pub scheduler: &'a mut Scheduler,
     pub search_state: &'a mut SearchState,
     pub inline_search_state: &'a mut InlineSearchState,
@@ -896,30 +895,7 @@ impl<'a, N: Notify + 'a, T: EventListener> input::ActionContext<T> for ActionCon
     //     self.spawn_daemon(&alacritty, &args);
     // }
 
-    fn window_action(&mut self, action: &WindowAction) {
-        match action {
-            WindowAction::Close => {
-                let _ = self.event_proxy.send_event(Event::new(EventType::CreateWindow, None));
-            },
-            WindowAction::Focus => {
-                let _ = self.event_proxy.send_event(Event::new(EventType::CreateWindow, None));
-            },
-            WindowAction::Hide => {
-                let _ = self.event_proxy.send_event(Event::new(EventType::CreateWindow, None));
-            },
-            WindowAction::Quit => {
-                let _ = self.event_proxy.send_event(Event::new(EventType::CreateWindow, None));
-            },
-            WindowAction::Toggle => {
-                let _ = self.event_proxy.send_event(Event::new(EventType::CreateWindow, None));
-            },
-            WindowAction::ToggleMaximized => {
-                let _ = self.event_proxy.send_event(Event::new(EventType::CreateWindow, None));
-            },
-        }
-    }
-
-    fn spawn_daemon<I, S>(&self, program: &str, args: I)
+    fn spawn_daemon<I, S>(&self, program: &Path, args: I)
     where
         I: IntoIterator<Item = S> + Debug + Copy,
         S: AsRef<OsStr>,
@@ -930,8 +906,10 @@ impl<'a, N: Notify + 'a, T: EventListener> input::ActionContext<T> for ActionCon
         let result = spawn_daemon(program, args);
 
         match result {
-            Ok(_) => debug!("Launched {program} with args {args:?}"),
-            Err(err) => warn!("Unable to launch {program} with args {args:?}: {err}"),
+            Ok(_) => debug!("Launched {} with args {args:?}", program.to_string_lossy()),
+            Err(err) => {
+                warn!("Unable to launch {} with args {args:?}: {err}", program.to_string_lossy())
+            },
         }
     }
 
@@ -1498,13 +1476,8 @@ impl<'a, N: Notify + 'a, T: EventListener> input::ActionContext<T> for ActionCon
         self.message_buffer.message()
     }
 
-    fn config(&self) -> &UiConfig {
+    fn config(&self) -> &AlacrittyConfig {
         self.config
-    }
-
-    #[cfg(target_os = "macos")]
-    fn event_loop(&self) -> &dyn ActiveEventLoop {
-        self.event_loop
     }
 
     fn clipboard_mut(&mut self) -> &mut Clipboard {
@@ -1953,9 +1926,9 @@ impl input::Processor<EventProxy, ActionContext<'_, Notifier, EventProxy>> {
                     TerminalEvent::Exit | TerminalEvent::ChildExit(_) | TerminalEvent::Wakeup => (),
                 },
                 EventType::Message(_)
-                | EventType::ConfigReload(_)
+                | EventType::ConfigReload
                 | EventType::CreateWindow
-                | EventType::ShowWindow(_)
+                | EventType::Window(_)
                 | EventType::Frame
                 | EventType::Quit => (),
             },
@@ -2035,7 +2008,9 @@ impl input::Processor<EventProxy, ActionContext<'_, Notifier, EventProxy>> {
                         // note that pressing hotkey can cause it to become unfocused
                         if is_focused {
                             self.ctx.display.visible = true
-                        };
+                        } else {
+                            *LOST_FOCUS.lock() = Some(Instant::now());
+                        }
                         self.ctx.display.is_focused = is_focused;
 
                         self.ctx.update_cursor_blinking();

@@ -4,7 +4,7 @@ use std::{cmp, mem, ops};
 
 use crossfont::{BitmapBuffer, Metrics, RasterizedGlyph};
 
-use crate::config::ui_config::Delta;
+use crate::config::types::Delta;
 
 // Colors which are used for filling shade variants.
 const COLOR_FILL_ALPHA_STEP_1: Pixel = Pixel { _r: 192, _g: 192, _b: 192 };

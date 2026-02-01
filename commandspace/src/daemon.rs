@@ -1,7 +1,5 @@
 #[cfg(target_os = "openbsd")]
 use std::ffi::CStr;
-#[cfg(not(windows))]
-use std::ffi::CString;
 use std::ffi::OsStr;
 #[cfg(not(any(target_os = "macos", target_os = "openbsd", windows)))]
 use std::fs;
@@ -13,6 +11,8 @@ use std::os::windows::process::CommandExt;
 use std::process::{Command, Stdio};
 #[cfg(target_os = "openbsd")]
 use std::ptr;
+#[cfg(not(windows))]
+use std::{ffi::CString, path::Path};
 
 #[rustfmt::skip]
 #[cfg(not(windows))]
@@ -33,7 +33,7 @@ use crate::macos;
 
 /// Start a new process in the background.
 #[cfg(windows)]
-pub fn spawn_daemon<I, S>(program: &str, args: I) -> io::Result<()>
+pub fn spawn_daemon<I, S>(program: &Path, args: I) -> io::Result<()>
 where
     I: IntoIterator<Item = S> + Copy,
     S: AsRef<OsStr>,
@@ -55,7 +55,7 @@ where
 /// Start a new process in the background.
 #[cfg(not(windows))]
 pub fn spawn_daemon<I, S>(
-    program: &str,
+    program: &Path,
     args: I,
     master_fd: RawFd,
     shell_pid: u32,

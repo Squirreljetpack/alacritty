@@ -1,21 +1,10 @@
 use std::mem;
 
-use crate::display::color::Rgb;
+pub use crate::config::bg::BgConfig;
 use crate::gl;
 use crate::gl::types::*;
 use crate::renderer;
 use crate::renderer::shader::{ShaderError, ShaderProgram, ShaderVersion};
-
-#[derive(Debug, Copy, Clone)]
-pub struct BgConfig {
-    pub radius: f32,
-    pub bg_color: Rgb,
-    pub bg_alpha: f32,
-    pub frame_color: Rgb,
-    pub frame_alpha: f32,
-    pub frame_offset: f32,
-    pub frame_thickness: f32,
-}
 
 const RECT_SHADER_V: &str = include_str!("../../res/bg.v.glsl");
 const BG_SHADER_F: &str = include_str!("../../res/bg.f.glsl");

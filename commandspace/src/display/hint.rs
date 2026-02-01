@@ -13,8 +13,8 @@ use alacritty_terminal::term::cell::Hyperlink;
 use alacritty_terminal::term::search::{Match, RegexIter, RegexSearch};
 use alacritty_terminal::term::{Term, TermMode};
 
-use crate::config::UiConfig;
-use crate::config::ui_config::{Hint, HintAction};
+use crate::config::AlacrittyConfig;
+use crate::config::hint::{Hint, HintAction};
 
 /// Maximum number of linewraps followed outside of the viewport during search highlighting.
 pub const MAX_SEARCH_LINES: usize = 100;
@@ -388,7 +388,7 @@ fn regex_match_at<T>(
 /// Check if there is a hint highlighted at the specified point.
 pub fn highlighted_at<T>(
     term: &Term<T>,
-    config: &UiConfig,
+    config: &AlacrittyConfig,
     point: Point,
     mouse_mods: ModifiersState,
 ) -> Option<HintMatch> {
@@ -590,11 +590,10 @@ impl<T> Iterator for HintPostProcessor<'_, T> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use alacritty_terminal::index::{Column, Line};
     use alacritty_terminal::term::test::mock_term;
     use alacritty_terminal::vte::ansi::Handler;
-
-    use super::*;
 
     #[test]
     fn hint_label_generation() {
@@ -699,5 +698,55 @@ mod tests {
 
         // The iterator should match everything in the viewport.
         assert_eq!(visible_regex_match_iter(&term, &mut regex).count(), 4096);
+    }
+
+    use crate::config::hint::URL_REGEX;
+    #[test]
+    fn positive_url_parsing_regex_test() {
+        for regular_url in [
+            "ipfs:s0mEhAsh",
+            "ipns:an0TherHash1234",
+            "magnet:?xt=urn:btih:L0UDHA5H12",
+            "mailto:example@example.org",
+            "gemini://gemini.example.org/",
+            "gopher://gopher.example.org",
+            "https://www.example.org",
+            "http://example.org",
+            "news:some.news.portal",
+            "file:///C:/Windows/",
+            "file:/home/user/whatever",
+            "git://github.com/user/repo.git",
+            "ssh:git@github.com:user/repo.git",
+            "ftp://ftp.example.org",
+        ] {
+            let term = mock_term(regular_url);
+            let mut regex = RegexSearch::new(URL_REGEX).unwrap();
+            let matches = visible_regex_match_iter(&term, &mut regex).collect::<Vec<_>>();
+            assert_eq!(
+                matches.len(),
+                1,
+                "Should have exactly one match url {regular_url}, but instead got: {matches:?}"
+            )
+        }
+    }
+
+    #[test]
+    fn negative_url_parsing_regex_test() {
+        for url_like in [
+            "http::trace::on_request::log_parameters",
+            "http//www.example.org",
+            "/user:example.org",
+            "mailto: example@example.org",
+            "http://<script>alert('xss')</script>",
+            "mailto:",
+        ] {
+            let term = mock_term(url_like);
+            let mut regex = RegexSearch::new(URL_REGEX).unwrap();
+            let matches = visible_regex_match_iter(&term, &mut regex).collect::<Vec<_>>();
+            assert!(
+                matches.is_empty(),
+                "Should not match url in string {url_like}, but instead got: {matches:?}"
+            )
+        }
     }
 }

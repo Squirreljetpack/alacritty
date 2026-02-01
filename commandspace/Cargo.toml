@@ -1,96 +1,102 @@
 [package]
-name = "commandspace"
-version = "0.17.0-dev"
-authors = ["Squirreljetpack <squirreljetpacks@gmail.com>"]
-edition.workspace = true
-homepage = "https://commandspace.netlify.app"
-license = "Apache-2.0"
-readme = "README.md"
-repository = "https://github.com/commandspace/commandspace"
-rust-version.workspace = true
-description = "A Retro Application launcher"
+  name                   = "commandspace"
+  version                = "0.17.0-dev"
+  authors                = [ "Squirreljetpack <squirreljetpacks@gmail.com>" ]
+  edition.workspace      = true
+  homepage               = "https://commandspace.netlify.app"
+  license                = "Apache-2.0"
+  readme                 = "README.md"
+  repository             = "https://github.com/commandspace/commandspace"
+  rust-version.workspace = true
+  description            = "A Retro Application launcher"
 
 [dependencies.alacritty_terminal]
-path = "../alacritty_terminal"
-version = "0.25.2-dev"
+  path    = "../alacritty_terminal"
+  version = "0.25.2-dev"
 
-[dependencies.alacritty_config_derive]
-path = "../alacritty_config_derive"
-version = "0.2.6-dev"
+  # [dependencies.alacritty_config_derive]
+  # path = "../alacritty_config_derive"
+  # version = "0.2.6-dev"
 
-[dependencies.alacritty_config]
-path = "../alacritty_config"
-version = "0.2.4-dev"
+  # [dependencies.alacritty_config]
+  # path = "../alacritty_config"
+  # version = "0.2.4-dev"
 
 [dependencies]
-ahash = { version = "0.8.6", features = ["no-rng"] }
-bitflags = "2.2.1"
-clap = { version = "4.2.7", features = ["derive", "env"] }
-copypasta = { version = "0.10.1", default-features = false }
-crossfont = "0.9.0"
-glutin = { version = "0.32.2", default-features = false, features = ["egl", "wgl"] }
-gtk = "0.18.2"
-home = "0.5.5"
-image = { version = "0.25.9", default-features = false, features = ["png"] }
-libc = "0.2"
-log = { version = "0.4", features = ["std", "serde"] }
-notify = "8.0.0"
-parking_lot = "0.12.0"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-serde_yaml = "0.9.25"
-tempfile = "3.12.0"
-thiserror = "2.0.18"
-toml.workspace = true
-toml_edit.workspace = true
-tray-icon = "0.21.3"
-unicode-width = "0.2.0"
-which = "8.0.0"
-winit = { version = "=0.31.0-beta.2", default-features = false, features = ["serde"] }
-x11rb = { version = "0.13.2", optional = true }
+  ahash                      = { version = "0.8.6", features = [ "no-rng" ] }
+  bitflags                   = "2.2.1"
+  cli_boilerplate_automation = { version = "0" }
+  clap                       = { version = "4.2.7", features = [ "derive", "env" ] }
+  copypasta                  = { version = "0.10.1", default-features = false }
+  crossfont                  = "0.9.0"
+  glutin                     = { version = "0.32.2", default-features = false, features = [ "egl", "wgl" ] }
+  gtk                        = "0.18.2"
+  home                       = "0.5.5"
+  image                      = { version = "0.25.9", default-features = false, features = [ "png" ] }
+  libc                       = "0.2"
+  log                        = { version = "0.4", features = [ "std", "serde" ] }
+  notify                     = "8.0.0"
+  parking_lot                = "0.12.0"
+  serde                      = { version = "1", features = [ "derive" ] }
+  serde_json                 = "1"
+  serde_yaml                 = "0.9.25"
+  tempfile                   = "3.12.0"
+  thiserror                  = "2.0.18"
+  toml.workspace             = true
+  toml_edit.workspace        = true
+  tray-icon                  = "0.21.3"
+  unicode-width              = "0.2.0"
+  which                      = "8.0.0"
+  winit                      = { version = "=0.31.0-beta.2", default-features = false, features = [ "serde" ] }
+  x11rb                      = { version = "0.13.2", optional = true }
+  dirs                       = "6.0.0"
+  keyboard-types             = "0.7.0"                                                                          # global-hotkey
 
 [build-dependencies]
-gl_generator = "0.14.0"
+  gl_generator = "0.14.0"
 
 [dev-dependencies]
-clap_complete = "4.2.3"
+  clap_complete = "4.2.3"
 
 [target.'cfg(not(windows))'.dependencies]
-xdg = "3.0.0"
+  xdg = "3.0.0"
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
-png = { version = "0.17.5", default-features = false, optional = true }
-rdev = { version = "0.5.3", features = ["unstable_grab"] }
+  png = { version = "0.17.5", default-features = false, optional = true }
+  # rdev = { version = "0.6", features = [ "unstable_grab" ] }
+  # rdev = { version = "0.5.0-2", git = "https://github.com/rustdesk-org/rdev" }
+  global-hotkey = "0.7.0"
+
 
 [target.'cfg(target_os = "macos")'.dependencies]
-objc2 = "0.6.1"
-objc2-core-foundation = { version = "0.3", default-features = false, features = ["std", "CFCGTypes", "CFRunLoop"] }
-objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString", "NSLocale", "NSUserDefaults"] }
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSColorSpace", "NSResponder", "NSView", "NSWindow"] }
-global-hotkey = "0.7.0"
+  objc2                 = "0.6.1"
+  objc2-core-foundation = { version = "0.3", default-features = false, features = [ "std", "CFCGTypes", "CFRunLoop" ] }
+  objc2-foundation      = { version = "0.3", default-features = false, features = [ "std", "NSString", "NSLocale", "NSUserDefaults" ] }
+  objc2-app-kit         = { version = "0.3", default-features = false, features = [ "std", "NSColorSpace", "NSResponder", "NSView", "NSWindow" ] }
+  global-hotkey         = "0.7.0"
 
 [target.'cfg(windows)'.dependencies]
-dirs = "6.0.0"
-windows-sys = { version = "0.59", features = ["Win32_UI_WindowsAndMessaging", "Win32_System_Threading", "Win32_System_Console", "Win32_Foundation"] }
+  dirs        = "6.0.0"
+  windows-sys = { version = "0.59", features = [ "Win32_UI_WindowsAndMessaging", "Win32_System_Threading", "Win32_System_Console", "Win32_Foundation" ] }
 
 [target.'cfg(windows)'.build-dependencies]
-embed-resource = "3.0.2"
+  embed-resource = "3.0.2"
 
 [features]
-default = ["wayland", "x11"]
-x11 = [
-  "copypasta/x11",
-  "winit/x11",
-  "glutin/x11",
-  "glutin/glx",
-  "png",
-  "x11rb",
-]
-wayland = [
-  "copypasta/wayland",
-  "glutin/wayland",
-  "winit/wayland",
-  "winit/wayland-dlopen",
-  "winit/wayland-csd-adwaita-crossfont",
-]
-nightly = []
+  default = [ "wayland", "x11" ]
+  x11 = [
+    "copypasta/x11",
+    "winit/x11",
+    "glutin/x11",
+    "glutin/glx",
+    "png",
+    "x11rb",
+  ]
+  wayland = [
+    "copypasta/wayland",
+    "glutin/wayland",
+    "winit/wayland",
+    "winit/wayland-dlopen",
+    "winit/wayland-csd-adwaita-crossfont",
+  ]
+  nightly = [  ]

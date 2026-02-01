@@ -9,7 +9,7 @@ use log::{error, info};
 use unicode_width::UnicodeWidthChar;
 
 use crate::config::font::{Font, FontDescription};
-use crate::config::ui_config::Delta;
+use crate::config::types::Delta;
 use crate::gl::types::*;
 
 use super::builtin_font;

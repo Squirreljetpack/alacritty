@@ -12,17 +12,14 @@ use std::ffi::OsStr;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::mem;
+use std::path::Path;
 use std::time::{Duration, Instant};
 
 use log::debug;
 use winit::cursor::CursorIcon;
 use winit::dpi::PhysicalPosition;
 use winit::event::{ElementState, Modifiers, MouseButton, MouseScrollDelta, TouchPhase};
-#[cfg(target_os = "macos")]
-use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::ModifiersState;
-#[cfg(target_os = "macos")]
-use winit::platform::macos::ActiveEventLoopExtMacOS;
 
 use alacritty_terminal::event::EventListener;
 use alacritty_terminal::grid::{Dimensions, Scroll};
@@ -34,8 +31,9 @@ use alacritty_terminal::vi_mode::ViMotion;
 use alacritty_terminal::vte::ansi::{ClearMode, Handler};
 
 use crate::clipboard::Clipboard;
+use crate::config::action::WindowAction;
 use crate::config::{
-    Action, BindingMode, MouseAction, MouseEvent, SearchAction, UiConfig, ViAction, WindowAction,
+    Action, AlacrittyConfig, BindingMode, MouseAction, MouseEvent, SearchAction, ViAction,
 };
 use crate::display::hint::HintMatch;
 use crate::display::window::{ImeInhibitor, Window};
@@ -94,14 +92,11 @@ pub trait ActionContext<T: EventListener> {
     fn display(&mut self) -> &mut Display;
     fn terminal(&self) -> &Term<T>;
     fn terminal_mut(&mut self) -> &mut Term<T>;
-    fn window_action(&mut self, _action: &WindowAction) {}
     fn change_font_size(&mut self, _delta: f32) {}
     fn reset_font_size(&mut self) {}
     fn pop_message(&mut self) {}
     fn message(&self) -> Option<&Message>;
-    fn config(&self) -> &UiConfig;
-    #[cfg(target_os = "macos")]
-    fn event_loop(&self) -> &dyn ActiveEventLoop;
+    fn config(&self) -> &AlacrittyConfig;
     fn mouse_mode(&self) -> bool;
     fn clipboard_mut(&mut self) -> &mut Clipboard;
     fn scheduler_mut(&mut self) -> &mut Scheduler;
@@ -130,7 +125,7 @@ pub trait ActionContext<T: EventListener> {
     fn semantic_word(&self, point: Point) -> String;
     fn on_terminal_input_start(&mut self) {}
     fn paste(&mut self, _text: &str, _bracketed: bool) {}
-    fn spawn_daemon<I, S>(&self, _program: &str, _args: I)
+    fn spawn_daemon<I, S>(&self, _program: &Path, _args: I)
     where
         I: IntoIterator<Item = S> + Debug + Copy,
         S: AsRef<OsStr>,
@@ -162,7 +157,6 @@ impl<T: EventListener> Execute<T> for Action {
     fn execute<A: ActionContext<T>>(&self, ctx: &mut A) {
         match self {
             Action::Esc(s) => ctx.paste(s, false),
-            Action::Command(program) => ctx.spawn_daemon(program.program(), program.args()),
             Action::Hint(hint) => {
                 ctx.display().hint_state.start(hint.clone());
                 ctx.mark_dirty();
@@ -324,7 +318,6 @@ impl<T: EventListener> Execute<T> for Action {
                 let text = ctx.clipboard_mut().load(ClipboardType::Selection);
                 ctx.paste(&text, true);
             },
-            Action::Window(action) => ctx.window_action(action),
 
             Action::IncreaseFontSize => ctx.change_font_size(FONT_SIZE_STEP),
             Action::DecreaseFontSize => ctx.change_font_size(-FONT_SIZE_STEP),
@@ -382,6 +375,21 @@ impl<T: EventListener> Execute<T> for Action {
             },
             Action::ClearHistory => ctx.terminal_mut().clear_screen(ClearMode::Saved),
             Action::ClearLogNotice => ctx.pop_message(),
+            Action::Window(window_action) => match window_action {
+                WindowAction::Quit => {
+                    ctx.window().hold = false;
+                    ctx.terminal_mut().exit();
+                },
+                WindowAction::Hide => ctx.window().set_visible(false),
+                WindowAction::Toggle => {
+                    ctx.window().set_minimized(true);
+                },
+                WindowAction::ToggleMaximized => ctx.window().toggle_maximized(),
+                WindowAction::Focus => {
+                    ctx.window().focus();
+                },
+                _ => {},
+            },
             _ => (),
         }
     }
@@ -471,8 +479,8 @@ impl<T: EventListener, A: ActionContext<T>> Processor<T, A> {
         let end_of_grid = size_info.width() - size_info.padding_x() - additional_padding;
 
         if cell_x > half_cell_width
-            // Edge case when mouse leaves the window.
-            || x as f32 >= end_of_grid
+        // Edge case when mouse leaves the window.
+        || x as f32 >= end_of_grid
         {
             Side::Right
         } else {
@@ -1112,7 +1120,7 @@ mod tests {
         pub clipboard: &'a mut Clipboard,
         pub message_buffer: &'a mut MessageBuffer,
         pub modifiers: Modifiers,
-        config: &'a UiConfig,
+        config: &'a AlacrittyConfig,
         inline_search_state: &'a mut InlineSearchState,
     }
 
@@ -1197,17 +1205,12 @@ mod tests {
             self.message_buffer.message()
         }
 
-        fn config(&self) -> &UiConfig {
+        fn config(&self) -> &AlacrittyConfig {
             self.config
         }
 
         fn clipboard_mut(&mut self) -> &mut Clipboard {
             self.clipboard
-        }
-
-        #[cfg(target_os = "macos")]
-        fn event_loop(&self) -> &dyn ActiveEventLoop {
-            unimplemented!();
         }
 
         fn scheduler_mut(&mut self) -> &mut Scheduler {
@@ -1231,7 +1234,7 @@ mod tests {
             #[test]
             fn $name() {
                 let mut clipboard = Clipboard::new_nop();
-                let cfg = UiConfig::default();
+                let cfg = AlacrittyConfig::default();
                 let size = SizeInfo::new(
                     21.0,
                     51.0,

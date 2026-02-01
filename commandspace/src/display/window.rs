@@ -37,7 +37,7 @@ use {
 use alacritty_terminal::index::Point;
 
 use crate::cli::WindowOptions;
-use crate::config::UiConfig;
+use crate::config::AlacrittyConfig;
 use crate::config::window::{Identity, WindowConfig};
 use crate::display::SizeInfo;
 
@@ -125,7 +125,7 @@ impl Window {
     /// This creates a window and fully initializes a window.
     pub fn new(
         event_loop: &dyn ActiveEventLoop,
-        config: &UiConfig,
+        config: &AlacrittyConfig,
         identity: &Identity,
         options: &mut WindowOptions,
         #[rustfmt::skip]
@@ -212,7 +212,7 @@ impl Window {
         match window_handle {
             // --- macOS (AppKit) ---
             #[cfg(target_os = "macos")]
-            RawWindowHandle::AppKit(h) => {
+            RawWindowHandle::AppKit(handle) => {
                 use objc2::rc::Retained;
                 use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
 
@@ -221,7 +221,7 @@ impl Window {
                     assert!(MainThreadMarker::new().is_some());
                     handle.ns_view.cast::<NSView>().as_ref()
                 };
-                let ns_window: Retained<NSWindow> = ns_view.window().expect("NSView has no window");
+                let ns_window: Retained<NSWindow> = view.window().expect("NSView has no window");
 
                 let behavior = NSWindowCollectionBehavior::CanJoinAllSpaces
                     | NSWindowCollectionBehavior::Stationary
@@ -560,23 +560,23 @@ impl Window {
         self.window.set_surface_resize_increments(Some(increments.into()));
     }
 
-    // pub fn set_maximized(&self, maximized: bool) {
-    //     self.window.set_maximized(maximized);
-    // }
+    pub fn set_maximized(&self, maximized: bool) {
+        self.window.set_maximized(maximized);
+    }
 
-    // pub fn set_minimized(&self, minimized: bool) {
-    //     self.window.set_minimized(minimized);
-    // }
+    pub fn set_minimized(&self, minimized: bool) {
+        self.window.set_minimized(minimized);
+    }
 
     // /// Toggle the window's fullscreen state.
     // pub fn toggle_fullscreen(&self) {
     //     self.set_fullscreen(self.window.fullscreen().is_none());
     // }
 
-    // /// Toggle the window's maximized state.
-    // pub fn toggle_maximized(&self) {
-    //     self.set_maximized(!self.window.is_maximized());
-    // }
+    /// Toggle the window's maximized state.
+    pub fn toggle_maximized(&self) {
+        self.set_maximized(!self.window.is_maximized());
+    }
 
     // pub fn set_fullscreen(&self, fullscreen: bool) {
     //     if fullscreen {
@@ -594,22 +594,12 @@ impl Window {
     }
 
     #[cfg(target_os = "macos")]
-    pub fn toggle_simple_fullscreen(&self) {
-        self.set_simple_fullscreen(!self.window.simple_fullscreen());
-    }
-
-    #[cfg(target_os = "macos")]
     pub fn set_option_as_alt(&self, option_as_alt: OptionAsAlt) {
         self.window.set_option_as_alt(option_as_alt);
     }
 
     pub fn current_monitor(&self) -> Option<MonitorHandle> {
         self.window.current_monitor()
-    }
-
-    #[cfg(target_os = "macos")]
-    pub fn set_simple_fullscreen(&self, simple_fullscreen: bool) {
-        self.window.set_simple_fullscreen(simple_fullscreen);
     }
 
     /// Set IME inhibitor state and disable IME while any are present.

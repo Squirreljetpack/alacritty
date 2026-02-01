@@ -1,7 +1,5 @@
 [workspace]
   members = [
-    "alacritty_config",
-    "alacritty_config_derive",
     "alacritty_terminal",
     "commandspace",
   ]

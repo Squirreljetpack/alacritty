@@ -18,22 +18,18 @@ use crate::cli::Options;
 use crate::event::{Event, EventLoopProxy, EventType};
 use crate::message_bar::{Message, MessageType};
 
-/// Logging target for IPC config error messages.
-pub const LOG_TARGET_IPC_CONFIG: &str = "alacritty_log_window_config";
-
 /// Name for the environment variable containing the log file's path.
-const ALACRITTY_LOG_ENV: &str = "ALACRITTY_LOG";
+const ALACRITTY_LOG_ENV: &str = "COMMANDSPACE_LOG";
 
-/// Logging target for config error messages.
-pub const LOG_TARGET_CONFIG: &str = "alacritty_config_derive";
+pub use crate::config::LOG_TARGET_CONFIG;
 
 /// Logging target for winit events.
-pub const LOG_TARGET_WINIT: &str = "alacritty_winit_event";
+pub const LOG_TARGET_WINIT: &str = "commandspace_winit_event";
 
 /// Name for the environment variable containing extra logging targets.
 ///
 /// The targets are semicolon separated.
-const ALACRITTY_EXTRA_LOG_TARGETS_ENV: &str = "ALACRITTY_EXTRA_LOG_TARGETS";
+const ALACRITTY_EXTRA_LOG_TARGETS_ENV: &str = "COMMANDSPACE_EXTRA_LOG_TARGETS";
 
 /// User configurable extra log targets to include.
 fn extra_log_targets() -> &'static [String] {
@@ -47,10 +43,8 @@ fn extra_log_targets() -> &'static [String] {
 
 /// List of targets which will be logged by Alacritty.
 const ALLOWED_TARGETS: &[&str] = &[
-    LOG_TARGET_IPC_CONFIG,
     LOG_TARGET_CONFIG,
     LOG_TARGET_WINIT,
-    "alacritty_config_derive",
     "alacritty_terminal",
     env!("CARGO_PKG_NAME"),
     "crossfont",

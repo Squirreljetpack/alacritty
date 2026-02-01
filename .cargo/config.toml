@@ -1,0 +1,2 @@
+[patch.crates-io]
+    cli_boilerplate_automation = { path = "../cli_boilerplate_automation" }
