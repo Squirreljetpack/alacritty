@@ -10,7 +10,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use unicode_width::UnicodeWidthChar;
 use winit::keyboard::{Key, ModifiersState};
 
-use crate::config::types::Program;
+use crate::types::Program;
 use alacritty_terminal::term::search::RegexSearch;
 
 use super::LOG_TARGET_CONFIG;

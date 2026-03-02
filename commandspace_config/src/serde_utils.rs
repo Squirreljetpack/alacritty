@@ -4,7 +4,7 @@
 use log::error;
 use serde::{Deserialize, Deserializer};
 
-use crate::config::{LOG_TARGET_CONFIG, bindings::Binding};
+use crate::{LOG_TARGET_CONFIG, bindings::Binding};
 pub(crate) struct StringVisitor;
 impl serde::de::Visitor<'_> for StringVisitor {
     type Value = String;

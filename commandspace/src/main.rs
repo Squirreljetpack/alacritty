@@ -30,7 +30,7 @@ use alacritty_terminal::tty;
 
 mod cli;
 mod clipboard;
-mod config;
+pub use commandspace_config as config;
 mod daemon;
 mod display;
 mod event;

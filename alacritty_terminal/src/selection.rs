@@ -17,9 +17,9 @@ use crate::vte::ansi::CursorShape;
 
 /// A Point and side within that point.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-struct Anchor {
-    point: Point,
-    side: Side,
+pub struct Anchor {
+    pub point: Point,
+    pub side: Side,
 }
 
 impl Anchor {
@@ -118,7 +118,7 @@ pub enum SelectionType {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Selection {
     pub ty: SelectionType,
-    region: Range<Anchor>,
+    pub region: Range<Anchor>,
 }
 
 impl Selection {

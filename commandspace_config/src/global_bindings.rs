@@ -1,10 +1,9 @@
 #![allow(unused)]
 
-use gtk::glib::collections::strv::IntoIter;
 use keyboard_types::{Code, Modifiers};
 use std::collections::HashMap;
 
-use crate::config::action::WindowAction;
+use crate::action::WindowAction;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct GlobalBinding {

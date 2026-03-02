@@ -57,6 +57,10 @@ mod inner {
 
 pub static LOST_FOCUS: Mutex<Option<Instant>> = Mutex::new(None);
 
+use crate::config::global_bindings::GlobalAction;
+use easy_ext::ext;
+
+#[ext]
 impl GlobalAction {
     fn dispatch(&self, event_proxy: &EventLoopProxy) {
         match self {
@@ -153,5 +157,3 @@ impl GlobalAction {
 
 pub use inner::*;
 use parking_lot::Mutex;
-
-use crate::config::global_bindings::GlobalAction;

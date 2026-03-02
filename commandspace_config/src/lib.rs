@@ -20,7 +20,7 @@ pub mod global_bindings;
 mod mouse;
 
 pub use action::{Action, MouseAction, SearchAction, ViAction};
-#[cfg(test)]
+// #[cfg(test)]
 pub use bindings::Binding;
 pub use bindings::{BindingKey, BindingMode, KeyBinding, MouseEvent};
 pub use configs::AlacrittyConfig;

@@ -459,9 +459,11 @@ dependencies = [
  "clap",
  "clap_complete",
  "cli_boilerplate_automation",
+ "commandspace_config",
  "copypasta",
  "crossfont",
  "dirs",
+ "easy-ext",
  "embed-resource",
  "gl_generator",
  "global-hotkey",
@@ -493,6 +495,21 @@ dependencies = [
  "winit",
  "x11rb",
  "xdg",
+]
+
+[[package]]
+name = "commandspace_config"
+version = "0.1.0"
+dependencies = [
+ "alacritty_terminal",
+ "bitflags 2.11.0",
+ "crossfont",
+ "keyboard-types 0.7.0",
+ "log",
+ "serde",
+ "toml 0.9.12+spec-1.1.0",
+ "unicode-width",
+ "winit",
 ]
 
 [[package]]

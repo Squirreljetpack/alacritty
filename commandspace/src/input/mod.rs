@@ -44,6 +44,8 @@ use crate::event::{
 use crate::message_bar::{self, Message};
 use crate::scheduler::{Scheduler, TimerId, Topic};
 
+use easy_ext::ext;
+
 pub mod keyboard;
 
 /// Font size change interval in px.
@@ -133,6 +135,7 @@ pub trait ActionContext<T: EventListener> {
     }
 }
 
+#[ext]
 impl Action {
     fn toggle_selection<T, A>(ctx: &mut A, ty: SelectionType)
     where
@@ -1105,8 +1108,8 @@ mod tests {
     use winit::event::WindowEvent;
     use winit::keyboard::Key;
 
-    use crate::config::Binding;
     use crate::message_bar::MessageBuffer;
+    use commandspace_config::Binding;
 
     const KEY: Key<&'static str> = Key::Character("0");
 
