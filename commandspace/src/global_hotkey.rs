@@ -3,8 +3,7 @@
 use std::time::Instant;
 
 use crate::{
-    _dbg,
-    config::global_bindings::GlobalBindings,
+    config::global_bindings::GlobalBindingsMap,
     event::{Event, EventLoopProxy},
 };
 
@@ -12,10 +11,11 @@ mod inner {
 
     use super::*;
 
+    use cli_boilerplate_automation::_dbg;
     use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState, hotkey::HotKey};
 
     pub fn init_hotkeys(
-        bindings: GlobalBindings,
+        bindings: GlobalBindingsMap,
         event_proxy: EventLoopProxy,
     ) -> global_hotkey::Result<GlobalHotKeyManager> {
         let hotkeys_manager = GlobalHotKeyManager::new()?;
@@ -34,7 +34,7 @@ mod inner {
         }
 
         let mut hk_binds = Vec::new();
-        for (hotkey, action) in bindings.0 {
+        for (hotkey, action) in bindings {
             let id = hk!(hotkey.mods, hotkey.key);
             hk_binds.push((id, action));
         }

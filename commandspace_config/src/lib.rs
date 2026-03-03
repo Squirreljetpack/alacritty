@@ -1,3 +1,5 @@
+pub mod paths;
+
 pub mod action;
 pub mod bell;
 pub mod bg;
@@ -23,7 +25,7 @@ pub use action::{Action, MouseAction, SearchAction, ViAction};
 // #[cfg(test)]
 pub use bindings::Binding;
 pub use bindings::{BindingKey, BindingMode, KeyBinding, MouseEvent};
-pub use configs::AlacrittyConfig;
+pub use configs::{AlacrittyConfig, Config};
 
 /// Logging target for config error messages.
 pub const LOG_TARGET_CONFIG: &str = "commandspace_config_derive";

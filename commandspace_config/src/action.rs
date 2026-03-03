@@ -114,6 +114,8 @@ pub enum Action {
 /// Window actions.
 #[allow(clippy::enum_variant_names)]
 #[derive(serde::Deserialize, serde::Serialize, Debug, Copy, Clone, PartialEq, Eq)]
+//
+#[derive(strum_macros::EnumIter, strum_macros::IntoStaticStr)]
 pub enum WindowAction {
     // global
     /// Focus the current window.

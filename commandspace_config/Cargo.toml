@@ -20,7 +20,13 @@
     serde          = { version = "1", features = [ "derive" ] }
     toml.workspace = true
 
+    # paths
+    cli_boilerplate_automation = "0.0.17"
+    dirs                       = "6.0.0"
+    which                      = "8.0.0"
 
     # todo: get rid of these by moving winit stuff out
     unicode-width.workspace = true
     winit                   = { version = "=0.31.0-beta.2", default-features = false, features = [ "serde" ] }
+strum_macros = "0.28.0"
+strum = { version = "0.28.0", features = ["strum_macros"] }

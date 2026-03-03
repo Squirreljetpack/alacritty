@@ -33,7 +33,7 @@ pub struct Options {
 
 impl Options {
     /// Override configuration file with options from the CLI.
-    pub fn override_config(&mut self, config: &mut AlacrittyConfig) {
+    pub fn override_config(&self, config: &mut AlacrittyConfig) {
         config.debug.print_events |= self.print_events;
         config.debug.log_level = max(config.debug.log_level, self.log_level());
 

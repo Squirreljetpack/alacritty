@@ -19,6 +19,7 @@ pub struct Cursor {
     pub style: ConfigCursorStyle,
     pub vi_mode_style: Option<ConfigCursorStyle>,
     pub unfocused_hollow: bool,
+    pub hide_when_typing: bool,
 
     thickness: Percentage,
     blink_interval: u64,
@@ -28,6 +29,7 @@ pub struct Cursor {
 impl Default for Cursor {
     fn default() -> Self {
         Self {
+            hide_when_typing: false,
             thickness: Percentage::new(0.15),
             unfocused_hollow: true,
             blink_interval: 750,
@@ -113,6 +115,8 @@ impl From<ConfigCursorStyle> for VteCursorStyle {
 }
 
 #[derive(serde::Deserialize, Serialize, Default, Debug, Copy, Clone, PartialEq, Eq)]
+//
+#[derive(strum_macros::EnumIter, strum_macros::IntoStaticStr)]
 pub enum CursorBlinking {
     Never,
     #[default]
@@ -138,6 +142,8 @@ impl From<CursorBlinking> for bool {
 }
 
 #[derive(serde::Deserialize, Serialize, Debug, Default, Eq, PartialEq, Copy, Clone, Hash)]
+//
+#[derive(strum_macros::EnumIter, strum_macros::IntoStaticStr)]
 pub enum CursorShape {
     #[default]
     Block,

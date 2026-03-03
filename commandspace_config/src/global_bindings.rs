@@ -1,7 +1,4 @@
-#![allow(unused)]
-
 use keyboard_types::{Code, Modifiers};
-use std::collections::HashMap;
 
 use crate::action::WindowAction;
 
@@ -27,7 +24,6 @@ impl HotKey {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
-#[serde(untagged)]
 pub enum GlobalAction {
     Window(WindowAction),
     Command(CommandAction),
@@ -35,24 +31,35 @@ pub enum GlobalAction {
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct CommandAction {
+    name: String,
     command: String,
     args: Vec<String>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Default)]
-pub struct GlobalBindings(pub Vec<(HotKey, GlobalAction)>);
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+pub struct GlobalBindings(pub GlobalBindingsMap, pub HotKey);
+
+pub type GlobalBindingsMap = Vec<(HotKey, GlobalAction)>;
 
 impl GlobalBindings {
-    pub fn default_binds() -> Self {
+    pub fn default_binds() -> GlobalBindingsMap {
+        let close = HotKey::new(Modifiers::CONTROL | Modifiers::SHIFT, Code::KeyW);
+
+        vec![(close, GlobalAction::Window(WindowAction::Quit))]
+    }
+}
+
+impl Default for GlobalBindings {
+    fn default() -> Self {
         #[cfg(target_os = "macos")]
         let toggle = HotKey::new(Modifiers::META, Code::Space);
         #[cfg(not(target_os = "macos"))]
         let toggle = HotKey::new(Modifiers::CONTROL, Code::Space);
-        let close = HotKey::new(Modifiers::CONTROL | Modifiers::SHIFT, Code::KeyW);
-        let ret = vec![(toggle, GlobalAction::Window(WindowAction::Toggle))];
-        Self(ret)
+
+        Self(Default::default(), toggle)
     }
 }
+
 // impl std::ops::DerefMut for CustomActions {
 //     fn deref_mut(&mut self) -> &mut Self::Target {
 //         &mut self.0

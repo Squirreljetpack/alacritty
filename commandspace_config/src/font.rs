@@ -153,6 +153,10 @@ impl<'de> Deserialize<'de> for Size {
             fn visit_i64<E: de::Error>(self, value: i64) -> Result<Self::Value, E> {
                 Ok(Size(FontSize::new(value as f32)))
             }
+
+            fn visit_u64<E: de::Error>(self, value: u64) -> Result<Self::Value, E> {
+                Ok(Size(FontSize::new(value as f32)))
+            }
         }
 
         deserializer.deserialize_any(NumVisitor)

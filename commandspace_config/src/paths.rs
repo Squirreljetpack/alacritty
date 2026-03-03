@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 use cli_boilerplate_automation::{bath::root_dir, bog::BogUnwrapExt, expr_as_path_fn};
 use std::{ffi::OsString, path::PathBuf};
 
@@ -34,6 +32,12 @@ pub fn config_dir() -> PathBuf {
     };
 
     dirs::config_dir()._ebog("Failed to determine config directory").join(BINARY_FULL)
+}
+pub fn settings_command() -> PathBuf {
+    #[cfg(debug_assertions)]
+    return __home().join("gh/_fzs/commandspace-settings/src-tauri/target/debug/app");
+    #[cfg(not(debug_assertions))]
+    return __home().join("gh/_fzs/commandspace-settings/src-tauri/target/release/app");
 }
 
 pub fn current_exe() -> std::ffi::OsString {

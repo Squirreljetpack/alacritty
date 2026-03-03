@@ -17,6 +17,7 @@ use std::time::{Duration, Instant};
 use std::{f32, mem};
 
 use ahash::RandomState;
+use cli_boilerplate_automation::_dbg;
 use crossfont::Size as FontSize;
 use glutin::config::{Config as GlutinConfig, GetGlConfig};
 #[cfg(not(target_os = "macos"))]
@@ -64,7 +65,7 @@ use crate::message_bar::{Message, MessageBuffer};
 use crate::scheduler::{Scheduler, TimerId, Topic};
 use crate::tray::Tray;
 use crate::window_context::WindowContext;
-use crate::{_dbg, ConfigMonitor, tray};
+use crate::{ConfigMonitor, tray};
 
 /// Duration after the last user input until an unlimited search is performed.
 pub const TYPING_SEARCH_DELAY: Duration = Duration::from_millis(500);
@@ -160,7 +161,6 @@ impl Processor {
     }
 
     /// Create a new terminal window.
-    #[allow(unused)]
     pub fn create_window(
         &mut self,
         event_loop: &dyn ActiveEventLoop,
@@ -320,6 +320,8 @@ impl ApplicationHandler for Processor {
             // Handle events which don't mandate the WindowId.
             match (event.payload, event.window_id.as_ref()) {
                 (EventType::ConfigReload, _) => {
+                    _dbg!("Recieved config update");
+
                     // Clear config logs from message bar for all terminals.
                     for window_context in self.windows.values_mut() {
                         if !window_context.message_buffer.is_empty() {
@@ -329,23 +331,28 @@ impl ApplicationHandler for Processor {
                     }
 
                     // Load config and update each terminal.
-                    if let Ok(config) = try_load_ui_config(&mut self.cli_options) {
+                    if let Some(config) = try_load_ui_config(&self.cli_options) {
+                        _dbg!(&config);
+
                         self.config = Rc::new(config);
 
                         for window_context in self.windows.values_mut() {
                             window_context.update_config(self.config.clone());
                         }
-                    }
+                    } else {
+                    };
                 },
                 // Create a new terminal window.
                 (EventType::CreateWindow, _) => {
-                    // todo: only create window if none are on the current screen
+                    // focus if nonempty
                     if !self.windows.is_empty() {
                         if let Some(window) = self.windows.values().next() {
                             window.display.window.focus();
                         }
                         return;
                     }
+
+                    // we should probably bypass the following checks, but it exists in the original so we keep it for now
 
                     // XXX Ensure that no context is current when creating a new window,
                     // otherwise it may lock the backing buffer of the
@@ -361,13 +368,15 @@ impl ApplicationHandler for Processor {
                             self.initial_window_error.set(Some(err));
                             event_loop.exit();
                         }
+                        // window was closed but gl_context exists
                     } else if let Err(err) = self.create_window(event_loop) {
                         log::error!("Could not open window: {err:?}");
                     }
                 },
 
+                // The eventual goal is to have 1-window with tabs, so window-action should never have a window id.
                 (EventType::Window(action), _) => {
-                    // todo: get the current window on this display instead of the first
+                    // create a window
                     let Some((_id, window_context)) = self.windows.iter_mut().next() else {
                         if matches!(action, WindowAction::Toggle | WindowAction::Focus) {
                             let _ =
@@ -418,7 +427,7 @@ impl ApplicationHandler for Processor {
                     event_loop.exit();
                 },
 
-                // Process events affecting all windows.
+                // Forward event to all windows.
                 (payload, None) => {
                     let event = WinitEvent::UserEvent(Event::new(payload, None));
                     for window_context in self.windows.values_mut() {
@@ -452,20 +461,6 @@ impl ApplicationHandler for Processor {
                     // Unschedule pending events.
                     self.scheduler.unschedule_window(window_context.id());
                 },
-                // (EventType::ShowWindow(visibility), Some(window_id)) => {
-                //     let Some(window_context) = self.windows.get_mut(window_id) else {
-                //         return;
-                //     };
-
-                //     let show = visibility.unwrap_or(
-                //         !(window_context.display.visible && window_context.display.is_focused),
-                //     );
-                //     if show {
-                //         window_context.display.show();
-                //     } else {
-                //         window_context.display.hide();
-                //     }
-                // },
 
                 // NOTE: This event bypasses batching to minimize input latency.
                 (EventType::Frame, Some(window_id)) => {
@@ -476,6 +471,8 @@ impl ApplicationHandler for Processor {
                         }
                     }
                 },
+
+                // forward to window_context
                 (payload, Some(window_id)) => {
                     if let Some(window_context) = self.windows.get_mut(window_id) {
                         window_context.handle_event(
@@ -1208,7 +1205,7 @@ impl<'a, N: Notify + 'a, T: EventListener> input::ActionContext<T> for ActionCon
         }
 
         // Hide mouse cursor.
-        if self.config.mouse.hide_when_typing && self.display.window.mouse_visible() {
+        if self.config.cursor.hide_when_typing && self.display.window.mouse_visible() {
             self.display.window.set_mouse_visible(false);
 
             // Request hint highlights update, since the mouse may have been hovering a hint.
@@ -1497,7 +1494,7 @@ impl<'a, N: Notify + 'a, T: EventListener> ActionContext<'a, N, T> {
         };
 
         // Hide cursor while typing into the search bar.
-        if self.config.mouse.hide_when_typing {
+        if self.config.cursor.hide_when_typing {
             self.display.window.set_mouse_visible(false);
         }
 

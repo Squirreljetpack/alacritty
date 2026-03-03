@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
@@ -132,8 +130,6 @@ impl AlacrittyConfig {
     }
 }
 
-
-
 /// The object deserialized from the main commandspace config file
 #[derive(Default, Deserialize, Serialize, Debug)]
 #[serde(default)]
@@ -154,41 +150,27 @@ pub struct Stats {
 }
 
 /// The alacritty object deserialized from the main commandspace config file
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Default, Deserialize, Serialize, Clone, Debug)]
 #[serde(default)]
 pub struct AlacrittyConfigGeneral {
+    pub env: HashMap<String, String>,
+    pub scrolling: Scrolling,
+    pub selection: Selection,
+
     pub cursor: Cursor,
     pub window: WindowConfig,
     pub colors: Colors,
+    pub font: Font,
     pub debug: Debug,
     pub default_command: Option<Program>,
-}
-
-impl Default for AlacrittyConfigGeneral {
-    fn default() -> Self {
-        Self {
-            cursor: Default::default(),
-            window: Default::default(),
-            colors: Default::default(),
-            debug: Default::default(),
-            default_command: None,
-        }
-    }
 }
 
 /// Alacritty settings which should be set manually in the alacritty.toml
 #[derive(Deserialize, Serialize, Default, Clone, Debug)]
 #[serde(deny_unknown_fields, default)]
 pub struct AlacrittyConfigSpecific {
-    pub env: HashMap<String, String>,
-
-    pub scrolling: Scrolling,
-
-    pub selection: Selection,
-    pub font: Font,
     pub mouse: Mouse,
     pub bell: BellConfig,
-
     pub hints: Hints,
     pub keyboard: Keyboard,
 }

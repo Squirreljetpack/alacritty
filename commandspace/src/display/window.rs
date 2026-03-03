@@ -329,6 +329,64 @@ impl Window {
         Ok(())
     }
 
+    #[cfg(all(feature = "x11", not(any(target_os = "macos", windows))))]
+    fn apply_sticky_x11(
+        raw_window: RawWindowHandle,
+    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
+        use x11rb::connection::Connection;
+        use x11rb::protocol::xproto::{
+            ClientMessageData, ClientMessageEvent, ConnectionExt, EventMask,
+        };
+
+        let window_id = match raw_window {
+            RawWindowHandle::Xlib(h) => h.window as u32,
+            RawWindowHandle::Xcb(h) => h.window.get(),
+            _ => return Ok(()),
+        };
+
+        let (conn, screen_num) = x11rb::connect(None)?;
+        let setup = conn.setup();
+        let root = setup.roots[screen_num].root;
+
+        // 1. Intern all necessary Atoms
+        let net_wm_state = conn.intern_atom(false, b"_NET_WM_STATE")?.reply()?.atom;
+        let net_wm_state_sticky = conn.intern_atom(false, b"_NET_WM_STATE_STICKY")?.reply()?.atom;
+
+        // This asks the WM to actively toggle the 'sticky' state.
+        // data.l[0] = 1 (Action: _NET_WM_STATE_ADD)
+        // data.l[1] = The atom we want to add
+        // data.l[3] = 1 (Source Indication: Application)
+        let data = ClientMessageData::from([
+            1, // _NET_WM_STATE_ADD
+            net_wm_state_sticky,
+            0, // Second property (unused)
+            1, // Source: Normal Application
+            0, // Unused
+        ]);
+
+        let event = ClientMessageEvent {
+            response_type: 33, // ClientMessage
+            format: 32,
+            sequence: 0,
+            window: window_id,
+            type_: net_wm_state,
+            data,
+        };
+
+        conn.send_event(
+            false,
+            root, // Must be sent to the Root window
+            EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY,
+            event,
+        )?;
+
+        // Force a round-trip to ensure the server processes these before we drop 'conn'
+        conn.get_input_focus()?.reply()?;
+        conn.flush()?;
+
+        Ok(())
+    }
+
     #[inline]
     pub fn raw_window_handle(&self) -> RawWindowHandle {
         self.window.window_handle().unwrap().as_raw()
@@ -361,6 +419,14 @@ impl Window {
         // todo: check if this should be universally set in ::Occluded
         if visibility {
             self.window.focus_window();
+            #[cfg(all(feature = "x11", not(any(target_os = "macos", windows))))]
+            {
+                use cli_boilerplate_automation::bait::ResultExt;
+
+                let window_handle =
+                    self.window.window_handle().expect("Failed to get window handle").as_raw();
+                Window::apply_sticky_x11(window_handle)._elog();
+            }
         }
     }
 
@@ -496,11 +562,11 @@ impl Window {
             .into();
 
         let mut attrs = WindowAttributesX11::default()
-        .with_x11_visual(x11_visual.unwrap().visual_id() as _)
-        .with_name(&identity.class.general, &identity.class.instance)
-        .with_x11_window_type(vec![WindowType::Utility])
-        // .with_override_redirect(true) // this keeps it above in case we want that
-        ;
+            .with_x11_visual(x11_visual.unwrap().visual_id() as _)
+            .with_name(&identity.class.general, &identity.class.instance)
+            .with_x11_window_type(vec![WindowType::Utility])
+            // .with_override_redirect(true) // this keeps it above in case we want that
+            ;
 
         if let Some(activation_token) = activation_token {
             attrs = attrs.with_activation_token(activation_token);

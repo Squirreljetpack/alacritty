@@ -17,8 +17,8 @@ use std::io::{self, Write};
 use std::path::PathBuf;
 use std::{env, fs};
 
-use cli_boilerplate_automation::bait::ResultExt;
-use cli_boilerplate_automation::bog;
+use cli_boilerplate_automation::bait::{ResultExt, TransformExt};
+use cli_boilerplate_automation::{_dbg, bog};
 use log::info;
 #[cfg(windows)]
 use windows_sys::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole};
@@ -31,6 +31,7 @@ use alacritty_terminal::tty;
 mod cli;
 mod clipboard;
 pub use commandspace_config as config;
+use commandspace_config::paths;
 mod daemon;
 mod display;
 mod event;
@@ -49,9 +50,7 @@ mod window_context;
 
 mod fzl;
 mod global_hotkey;
-mod paths;
 mod tray;
-mod utils;
 
 mod config_monitor;
 
@@ -155,7 +154,18 @@ fn alacritty(mut options: Options) -> Result<(), Box<dyn Error>> {
     info!("Running on Wayland");
 
     // Load configuration file.
-    let (config, _general_cfg) = cli::config::load(&mut options);
+    let (config, general_cfg) = cli::config::load(&mut options);
+    let global_bindings =
+        GlobalBindings::default_binds().modify(|x| x.extend(general_cfg.bindings.0)).modify(|x| {
+            x.push((
+                general_cfg.bindings.1,
+                commandspace_config::global_bindings::GlobalAction::Window(
+                    commandspace_config::action::WindowAction::Toggle,
+                ),
+            ))
+        });
+
+    _dbg!(&config.window);
 
     // Update the log level from config.
     log::set_max_level(config.debug.log_level);
@@ -184,10 +194,9 @@ fn alacritty(mut options: Options) -> Result<(), Box<dyn Error>> {
     let _files = TemporaryFiles { log_file: log_cleanup };
 
     // hotkey manager
-    let _hotkey_manager =
-        global_hotkey::init_hotkeys(GlobalBindings::default_binds(), proxy.clone())
-            .prefix("Unable to initialize hotkeys")
-            ._elog();
+    let _hotkey_manager = global_hotkey::init_hotkeys(global_bindings, proxy.clone())
+        .prefix("Unable to initialize hotkeys")
+        ._elog();
 
     // Event processor.
     let processor = Processor::new(config, options, &window_event_loop, proxy, rx);

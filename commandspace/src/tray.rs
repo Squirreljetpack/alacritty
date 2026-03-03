@@ -1,8 +1,12 @@
+use std::process::Command;
+
 use crate::{
     config::action::WindowAction,
     event::{Event, EventLoopProxy},
 };
 use alacritty_terminal::event::Event as TerminalEvent;
+use cli_boilerplate_automation::broc::CommandExt;
+use commandspace_config::paths::settings_command;
 use thiserror::Error;
 use tray_icon::{
     TrayIconBuilder,
@@ -65,6 +69,8 @@ pub fn set_handler(event_proxy: EventLoopProxy, ids: MenuIds) {
                 None,
             ));
         } else if event.id == &settings {
+            let mut cmd = Command::new(settings_command());
+            cmd._spawn();
             // let _ =
             //     event_proxy.send_event(Event::new(crate::event::EventType::ShowWindow(None), None));
         } else if event.id == &close {

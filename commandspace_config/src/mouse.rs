@@ -7,7 +7,7 @@ use super::{
 #[derive(serde::Deserialize, Serialize, Default, Clone, Debug, PartialEq, Eq)]
 #[serde(deny_unknown_fields, default)]
 pub struct Mouse {
-    pub hide_when_typing: bool,
+    // pub hide_when_typing: bool,
     #[serde(skip_serializing)]
     pub bindings: MouseBindings,
 }
