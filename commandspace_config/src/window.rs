@@ -9,10 +9,38 @@ use winit::platform::macos::OptionAsAlt as WinitOptionAsAlt;
 use winit::window::Theme as WinitTheme;
 
 use super::LOG_TARGET_CONFIG;
+use super::rgb::Rgb;
 use super::types::{Delta, Percentage};
 
 /// Default Alacritty name, used for window title and class.
 pub const DEFAULT_NAME: &str = "Commandspace";
+
+#[derive(serde::Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[serde(default)]
+pub struct FrameConfig {
+    /// Frame thickness in pixels.
+    pub thickness: f32,
+
+    /// Frame offset in pixels.
+    pub offset: f32,
+
+    /// Frame color.
+    pub color: Rgb,
+
+    /// Frame opacity from 0.0 to 1.0.
+    pub opacity: Percentage,
+}
+
+impl Default for FrameConfig {
+    fn default() -> Self {
+        Self {
+            thickness: 0.0,
+            offset: 0.0,
+            color: Default::default(),
+            opacity: Default::default(),
+        }
+    }
+}
 
 #[derive(serde::Deserialize, Serialize, Debug, Clone, PartialEq)]
 #[serde(default)]
@@ -25,6 +53,9 @@ pub struct WindowConfig {
 
     /// Radius size in pixels.
     pub radius: u16,
+
+    /// Frame settings.
+    pub frame: FrameConfig,
 
     /// Request blur behind the window.
     pub blur: bool,
@@ -48,6 +79,7 @@ impl Default for WindowConfig {
             blur: Default::default(),
             padding: Default::default(),
             radius: 5,
+            frame: Default::default(),
             opacity: Default::default(),
             identity: Default::default(),
             dimensions: Default::default(),

@@ -474,7 +474,7 @@ impl Display {
         renderer.resize(&size_info);
 
         // Clear screen.
-        renderer.clear(&size_info, &config.bg_config());
+        renderer.clear(&size_info, &config.bg_config(window.scale_factor as f32));
 
         let is_wayland = matches!(raw_window_handle, RawWindowHandle::Wayland(_));
 
@@ -831,7 +831,7 @@ impl Display {
         // Make sure this window's OpenGL context is active.
         self.make_current();
 
-        self.renderer.clear(&size_info, &config.bg_config());
+        self.renderer.clear(&size_info, &config.bg_config(self.window.scale_factor as f32));
         let mut lines = RenderLines::new();
 
         // Optimize loop hint comparator.

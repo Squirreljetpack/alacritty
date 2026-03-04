@@ -97,15 +97,15 @@ impl AlacrittyConfig {
     }
 
     /// Derive [`BgOptions`] from the config.
-    pub fn bg_config(&self) -> BgConfig {
+    pub fn bg_config(&self, scale_factor: f32) -> BgConfig {
         BgConfig {
-            radius: self.window_radius(),
+            radius: self.window_radius() * scale_factor,
             bg_color: self.colors.primary.background,
             bg_alpha: self.window_opacity(),
-            frame_color: Default::default(),
-            frame_alpha: 0.0,
-            frame_offset: 0.0,
-            frame_thickness: 0.0,
+            frame_color: self.window.frame.color,
+            frame_alpha: self.window.frame.opacity.as_f32(),
+            frame_offset: self.window.frame.offset * scale_factor,
+            frame_thickness: self.window.frame.thickness * scale_factor,
         }
     }
 
@@ -116,7 +116,7 @@ impl AlacrittyConfig {
 
     #[inline]
     pub fn window_radius(&self) -> f32 {
-        self.window.radius as f32 / 50.0
+        self.window.radius as f32
     }
 
     #[inline]

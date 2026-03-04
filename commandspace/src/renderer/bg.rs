@@ -1,6 +1,8 @@
 use std::mem;
 
-pub use crate::config::bg::BgConfig;
+use commandspace_config::bg::BgConfig;
+
+use crate::display::SizeInfo;
 use crate::gl;
 use crate::gl::types::*;
 use crate::renderer;
@@ -63,7 +65,7 @@ impl BgRenderer {
         Ok(Self { vao, vbo, program, vertices })
     }
 
-    pub fn draw(&self, info: &BgConfig) {
+    pub fn draw(&self, size_info: &SizeInfo, info: &BgConfig) {
         unsafe {
             gl::BindVertexArray(self.vao);
             gl::BindBuffer(gl::ARRAY_BUFFER, self.vbo);
@@ -80,7 +82,7 @@ impl BgRenderer {
             // Draw Bg
             let program = &self.program;
             gl::UseProgram(self.program.id());
-            program.update_uniforms(info);
+            program.update_uniforms(size_info, info);
             gl::DrawArrays(gl::TRIANGLES, 0, self.vertices.len() as i32);
 
             // Disable program.
@@ -105,6 +107,7 @@ impl Drop for BgRenderer {
 #[derive(Debug)]
 pub struct BgShaderProgram {
     program: ShaderProgram,
+    u_resolution: Option<GLint>,
     u_radius: Option<GLint>,
     u_bg_color: Option<GLint>,
     u_frame_color: Option<GLint>,
@@ -117,6 +120,7 @@ impl BgShaderProgram {
         let program = ShaderProgram::new(shader_version, None, RECT_SHADER_V, BG_SHADER_F)?;
 
         Ok(Self {
+            u_resolution: program.get_uniform_location(c"resolution").ok(),
             u_radius: program.get_uniform_location(c"radius").ok(),
             u_bg_color: program.get_uniform_location(c"bgColor").ok(),
             u_frame_color: program.get_uniform_location(c"frameColor").ok(),
@@ -130,8 +134,12 @@ impl BgShaderProgram {
         self.program.id()
     }
 
-    pub fn update_uniforms(&self, info: &BgConfig) {
+    pub fn update_uniforms(&self, size_info: &SizeInfo, info: &BgConfig) {
         unsafe {
+            if let Some(u_resolution) = self.u_resolution {
+                gl::Uniform2f(u_resolution, size_info.width(), size_info.height());
+            }
+
             if let Some(u_radius) = self.u_radius {
                 gl::Uniform1f(u_radius, info.radius);
             }
@@ -146,9 +154,6 @@ impl BgShaderProgram {
                 );
             }
 
-            if info.frame_thickness == 0.0 {
-                return;
-            }
             if let Some(u_frame_color) = self.u_frame_color {
                 let (r, g, b) = info.frame_color.as_tuple();
                 gl::Uniform4f(

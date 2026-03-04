@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::{fmt, ptr};
 
 use ahash::RandomState;
+use commandspace_config::bg::BgConfig;
 use crossfont::Metrics;
 use glutin::context::{ContextApi, GlContext, PossiblyCurrentContext};
 use glutin::display::{GetGlDisplay, GlDisplay};
@@ -20,7 +21,7 @@ use crate::display::SizeInfo;
 use crate::display::color::Rgb;
 use crate::display::content::RenderableCell;
 use crate::gl;
-use crate::renderer::bg::{BgConfig, BgRenderer};
+use crate::renderer::bg::BgRenderer;
 use crate::renderer::rects::{RectRenderer, RenderRect};
 use crate::renderer::shader::ShaderError;
 
@@ -279,7 +280,7 @@ impl Renderer {
             gl::ClearColor(0.0, 0.0, 0.0, 0.0);
             gl::Clear(gl::COLOR_BUFFER_BIT);
         }
-        self.bg_renderer.draw(info);
+        self.bg_renderer.draw(size_info, info);
         unsafe {
             gl::BlendFunc(gl::SRC1_COLOR, gl::ONE_MINUS_SRC1_COLOR);
             self.set_viewport(size_info);
