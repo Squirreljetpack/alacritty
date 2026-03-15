@@ -28,6 +28,8 @@
 
 [dependencies]
   cli_boilerplate_automation = { version = "0" }
+  clipboard_logger           = { path = "../../clipboard_logger" }
+  tokio                      = { version = "1.49.0", features = ["full"] }
   gtk                        = "0.18.2"
   keyboard-types.workspace   = true
   easy-ext                   = "1.0.2"

@@ -1,6 +1,6 @@
 // #[cfg(target_os = "macos")]
 
-use std::time::Instant;
+use std::{process::Command, time::Instant};
 
 use crate::{
     config::global_bindings::GlobalBindingsMap,
@@ -11,64 +11,122 @@ mod inner {
 
     use super::*;
 
-    use cli_boilerplate_automation::_dbg;
+    use std::sync::Arc;
+
     use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState, hotkey::HotKey};
+    use parking_lot::Mutex;
+    use tokio::sync::watch;
 
-    pub fn init_hotkeys(
-        bindings: GlobalBindingsMap,
+    pub type BindingsMap = Arc<Mutex<Vec<(u32, GlobalAction)>>>;
+
+    pub fn start_hotkeys_task(
+        mut receiver: watch::Receiver<GlobalBindingsMap>,
         event_proxy: EventLoopProxy,
-    ) -> global_hotkey::Result<GlobalHotKeyManager> {
-        let hotkeys_manager = GlobalHotKeyManager::new()?;
-
-        macro_rules! hk {
-            ($mods:expr, $code:expr) => {{
-                let hk = HotKey::new(Some($mods), $code);
-                hotkeys_manager.register(hk)?;
-                hk.id()
-            }};
-            ($code:expr) => {{
-                let hk = HotKey::new(None, $code);
-                hotkeys_manager.register(hk)?;
-                hk.id()
-            }};
-        }
-
-        let mut hk_binds = Vec::new();
-        for (hotkey, action) in bindings {
-            let id = hk!(hotkey.mods, hotkey.key);
-            hk_binds.push((id, action));
-        }
+    ) {
+        let bindings_map: BindingsMap = Arc::new(Mutex::new(Vec::new()));
+        let handler_bindings = Arc::clone(&bindings_map);
+        let handler_proxy = event_proxy.clone();
 
         GlobalHotKeyEvent::set_event_handler(Some(move |event: GlobalHotKeyEvent| {
             if matches!(event.state, HotKeyState::Pressed) {
-                log::debug!("Recieved hotkey {event:?}.");
-                _dbg!(event);
+                log::debug!("Received hotkey {event:?}.");
+                let map = handler_bindings.lock();
                 if let Some(action) =
-                    hk_binds.iter().find_map(|(id, action)| (*id == event.id).then_some(action))
+                    map.iter().find_map(|(id, action)| (*id == event.id).then_some(action))
                 {
-                    action.dispatch(&event_proxy);
+                    action.clone().dispatch(&handler_proxy);
                 }
             }
         }));
 
-        Ok(hotkeys_manager)
+        std::thread::spawn(move || {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("Failed to create tokio runtime for hotkeys");
+
+            rt.block_on(async move {
+                let mut _current_manager: Option<GlobalHotKeyManager> = None;
+
+                loop {
+                    let bindings = receiver.borrow_and_update().clone();
+
+                    match init_hotkeys_internal(bindings) {
+                        Ok((manager, map)) => {
+                            _current_manager = Some(manager);
+                            *bindings_map.lock() = map;
+                            log::info!("Global hotkeys updated successfully");
+                        },
+                        Err(e) => {
+                            log::error!("Failed to initialize hotkeys: {:?}", e);
+                        },
+                    }
+
+                    if receiver.changed().await.is_err() {
+                        break;
+                    }
+                }
+            });
+        });
     }
+
+    fn init_hotkeys_internal(
+        bindings: GlobalBindingsMap,
+    ) -> global_hotkey::Result<(GlobalHotKeyManager, Vec<(u32, GlobalAction)>)> {
+        let hotkeys_manager = GlobalHotKeyManager::new()?;
+        let mut hk_binds = Vec::new();
+
+        for (hotkey, action) in bindings {
+            let mods = hotkey.mods;
+            let code = hotkey.key;
+            let hk = HotKey::new(Some(mods), code);
+            hotkeys_manager.register(hk)?;
+            hk_binds.push((hk.id(), action));
+        }
+
+        Ok((hotkeys_manager, hk_binds))
+    }
+
+    // pub fn init_hotkeys(
+    //     bindings: GlobalBindingsMap,
+    //     event_proxy: EventLoopProxy,
+    // ) -> global_hotkey::Result<GlobalHotKeyManager> {
+    //     let (manager, hk_binds) = init_hotkeys_internal(bindings)?;
+    //     let hk_binds = Arc::new(Mutex::new(hk_binds));
+
+    //     GlobalHotKeyEvent::set_event_handler(Some(move |event: GlobalHotKeyEvent| {
+    //         if matches!(event.state, HotKeyState::Pressed) {
+    //             log::debug!("Recieved hotkey {event:?}.");
+    //             _dbg!(event);
+    //             let map = hk_binds.lock();
+    //             if let Some(action) =
+    //                 map.iter().find_map(|(id, action)| (*id == event.id).then_some(action))
+    //             {
+    //                 action.dispatch(&event_proxy);
+    //             }
+    //         }
+    //     }));
+
+    //     Ok(manager)
+    // }
 }
 
 pub static LOST_FOCUS: Mutex<Option<Instant>> = Mutex::new(None);
 
 use crate::config::global_bindings::GlobalAction;
+use cba::broc::CommandExt;
 use easy_ext::ext;
 
 #[ext]
 impl GlobalAction {
-    fn dispatch(&self, event_proxy: &EventLoopProxy) {
+    fn dispatch(self, event_proxy: &EventLoopProxy) {
         match self {
             GlobalAction::Window(action) => {
-                event_proxy.send_event(Event::new(crate::event::EventType::Window(*action), None))
+                event_proxy.send_event(Event::new(crate::event::EventType::Window(action), None))
             },
-            GlobalAction::Command(_cmd) => {
-                todo!()
+            GlobalAction::Command(cmd) => {
+                let mut cmd = Command::new(cmd.command).with_args(cmd.args);
+                cmd.spawn_detached();
             },
         }
     }

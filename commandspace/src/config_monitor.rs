@@ -2,6 +2,7 @@ use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
+use cba::_dbg;
 use log::{debug, error, warn};
 use notify::event::{ModifyKind, RenameMode};
 use notify::{
@@ -83,6 +84,8 @@ impl ConfigMonitor {
                         _ => (),
                     },
                     Err(RecvTimeoutError::Timeout) => {
+                        _dbg!(&received_events);
+
                         // Go back to polling the events.
                         debouncing_deadline = None;
 

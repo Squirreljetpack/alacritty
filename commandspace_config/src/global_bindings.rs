@@ -31,23 +31,15 @@ pub enum GlobalAction {
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct CommandAction {
-    name: String,
-    command: String,
-    args: Vec<String>,
+    pub name: String,
+    pub command: String,
+    pub args: Vec<String>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct GlobalBindings(pub GlobalBindingsMap, pub HotKey);
 
 pub type GlobalBindingsMap = Vec<(HotKey, GlobalAction)>;
-
-impl GlobalBindings {
-    pub fn default_binds() -> GlobalBindingsMap {
-        let close = HotKey::new(Modifiers::CONTROL | Modifiers::SHIFT, Code::KeyW);
-
-        vec![(close, GlobalAction::Window(WindowAction::Quit))]
-    }
-}
 
 impl Default for GlobalBindings {
     fn default() -> Self {

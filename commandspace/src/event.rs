@@ -11,13 +11,16 @@ use std::fmt::Debug;
 #[cfg(not(windows))]
 use std::os::unix::io::RawFd;
 use std::path::Path;
+use std::process::Command;
 use std::rc::Rc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
 use std::{f32, mem};
 
 use ahash::RandomState;
-use cli_boilerplate_automation::_dbg;
+use cba::_dbg;
+use cba::broc::CommandExt;
+use commandspace_config::paths::settings_command;
 use crossfont::Size as FontSize;
 use glutin::config::{Config as GlutinConfig, GetGlConfig};
 #[cfg(not(target_os = "macos"))]
@@ -47,6 +50,7 @@ use alacritty_terminal::term::search::{Match, RegexSearch};
 use alacritty_terminal::term::{self, ClipboardType, Term, TermMode};
 use alacritty_terminal::vte::ansi::NamedColor;
 
+use crate::ConfigMonitor;
 use crate::cli::config::try_load_ui_config;
 use crate::cli::{Options as CliOptions, WindowOptions};
 use crate::clipboard::Clipboard;
@@ -59,13 +63,12 @@ use crate::display::hint::HintMatch;
 use crate::display::window::{ImeInhibitor, Window};
 use crate::display::{Display, Preedit, SizeInfo};
 use crate::global_hotkey::LOST_FOCUS;
+use crate::global_tray::{self, Tray};
 use crate::input::{self, ActionContext as _, FONT_SIZE_STEP};
 use crate::logging::{LOG_TARGET_CONFIG, LOG_TARGET_WINIT};
 use crate::message_bar::{Message, MessageBuffer};
 use crate::scheduler::{Scheduler, TimerId, Topic};
-use crate::tray::Tray;
 use crate::window_context::WindowContext;
-use crate::{ConfigMonitor, tray};
 
 /// Duration after the last user input until an unlimited search is performed.
 pub const TYPING_SEARCH_DELAY: Duration = Duration::from_millis(500);
@@ -98,6 +101,7 @@ pub struct Processor {
     gl_config: Option<GlutinConfig>,
     cli_options: CliOptions,
     config: Rc<AlacrittyConfig>,
+    extra: crate::Extra,
 }
 
 impl Processor {
@@ -108,6 +112,7 @@ impl Processor {
         event_loop: &EventLoop,
         proxy: EventLoopProxy,
         user_events_rx: Receiver<Event>,
+        extra: crate::Extra,
     ) -> Processor {
         let scheduler = Scheduler::new(proxy.clone());
 
@@ -136,6 +141,7 @@ impl Processor {
             clipboard,
             windows: Default::default(),
             config_monitor,
+            extra,
         }
     }
 
@@ -254,7 +260,7 @@ impl ApplicationHandler for Processor {
         }
 
         {
-            self.tray = tray::init_tray(self.proxy.clone()).ok();
+            self.tray = global_tray::init_tray(self.proxy.clone()).ok();
         }
 
         // We have to request a redraw here to have the icon actually show up.
@@ -331,7 +337,7 @@ impl ApplicationHandler for Processor {
                     }
 
                     // Load config and update each terminal.
-                    if let Some(config) = try_load_ui_config(&self.cli_options) {
+                    if let Some((config, bindings)) = try_load_ui_config(&self.cli_options) {
                         _dbg!(&config);
 
                         self.config = Rc::new(config);
@@ -339,7 +345,8 @@ impl ApplicationHandler for Processor {
                         for window_context in self.windows.values_mut() {
                             window_context.update_config(self.config.clone());
                         }
-                    } else {
+
+                        let _ = self.extra.hotkey_tx.send_replace(bindings.0);
                     };
                 },
                 // Create a new terminal window.
@@ -385,25 +392,41 @@ impl ApplicationHandler for Processor {
                         return;
                     };
 
+                    #[cfg(debug_assertions)]
+                    {
+                        dbg!(
+                            window_context.display.visible,
+                            window_context.display.is_focused,
+                            LOST_FOCUS.lock().map(|x| Instant::now().duration_since(x))
+                        );
+                    }
+
                     match action {
                         WindowAction::Focus => window_context.display.show(),
                         WindowAction::Hide => window_context.display.hide(),
                         WindowAction::Toggle => {
+                            // activate show if not visible or lost focus more than x ms ago
                             let show = !window_context.display.visible
                                 || (!window_context.display.is_focused
-                                    // global_hotkey steals focus
-                                    && LOST_FOCUS.lock().take().is_none_or(|i| {
-                                        Instant::now().duration_since(i)
-                                            > Duration::from_millis(150)
-                                    }));
+                                // global_hotkey steals focus
+                                && LOST_FOCUS.lock().take().is_none_or(|i| {
+                                    Instant::now().duration_since(i)
+                                    > self.extra.lost_focus_ignore_duration
+                                }));
                             if show {
                                 window_context.display.show()
                             } else {
                                 window_context.display.hide()
                             };
+
+                            #[cfg(debug_assertions)]
+                            {
+                                dbg!(show, window_context.display.visible);
+                            }
                         },
                         WindowAction::Settings => {
-                            todo!()
+                            let mut cmd = Command::new(settings_command());
+                            cmd.spawn_detached();
                         },
                         WindowAction::ToggleMaximized => {
                             window_context.display.window.toggle_maximized();

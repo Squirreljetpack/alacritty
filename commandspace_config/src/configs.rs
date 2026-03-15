@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
@@ -131,7 +133,7 @@ impl AlacrittyConfig {
 }
 
 /// The object deserialized from the main commandspace config file
-#[derive(Default, Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(default)]
 pub struct Config {
     #[serde(flatten)]
@@ -139,12 +141,46 @@ pub struct Config {
     pub bindings: GlobalBindings,
     pub download: Download,
     pub stats: Stats,
+    pub misc: Misc,
+
+    pub data_dir: PathBuf,
+    pub clipboard: clipboard_logger::Config,
 }
 
-#[derive(Deserialize, Serialize, Default, Debug)]
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            alacritty: Default::default(),
+            bindings: Default::default(),
+            download: Default::default(),
+            misc: Default::default(),
+            stats: Default::default(),
+            data_dir: crate::paths::state_dir(),
+            clipboard: Default::default(),
+        }
+    }
+}
+
+impl Config {
+    pub fn clipboard_db(&self) -> PathBuf {
+        self.data_dir.join("clipboard.db")
+    }
+}
+
+#[derive(Deserialize, Serialize, Default, Debug, Clone)]
 pub struct Download {}
 
-#[derive(Deserialize, Serialize, Default, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct Misc {
+    pub lost_focus_ignore_duration: Duration,
+}
+impl Default for Misc {
+    fn default() -> Self {
+        Self { lost_focus_ignore_duration: Duration::from_millis(200) }
+    }
+}
+
+#[derive(Deserialize, Serialize, Default, Debug, Clone)]
 pub struct Stats {
     pub count: u8,
 }

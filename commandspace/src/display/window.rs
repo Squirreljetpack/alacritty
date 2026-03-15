@@ -421,7 +421,7 @@ impl Window {
             self.window.focus_window();
             #[cfg(all(feature = "x11", not(any(target_os = "macos", windows))))]
             {
-                use cli_boilerplate_automation::bait::ResultExt;
+                use cba::bait::ResultExt;
 
                 let window_handle =
                     self.window.window_handle().expect("Failed to get window handle").as_raw();

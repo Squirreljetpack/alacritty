@@ -1,6 +1,8 @@
-use cli_boilerplate_automation::bo::{load_type, load_type_or_default};
-use cli_boilerplate_automation::unwrap;
+use cba::bo::{load_type, load_type_or_default};
+use cba::unwrap;
 use commandspace_config::LOG_TARGET_CONFIG;
+use commandspace_config::action::WindowAction;
+use commandspace_config::global_bindings::{GlobalAction, GlobalBindings};
 
 use crate::cli::Options;
 
@@ -25,7 +27,7 @@ pub fn load(options: &mut Options) -> (AlacrittyConfig, Config) {
     (alacritty_cfg, cfg)
 }
 
-pub fn try_load_ui_config(options: &Options) -> Option<AlacrittyConfig> {
+pub fn try_load_ui_config(options: &Options) -> Option<(AlacrittyConfig, GlobalBindings)> {
     let specific_cfg: AlacrittyConfigSpecific = unwrap!(
         load_type(alacritty_config_path(), |s| toml::from_str(s));
         |e| {
@@ -33,7 +35,7 @@ pub fn try_load_ui_config(options: &Options) -> Option<AlacrittyConfig> {
             None
         }
     );
-    let cfg: Config = unwrap!(
+    let mut cfg: Config = unwrap!(
         load_type(config_path(), |s| toml::from_str(s));
         |e| {
             log::error!(target: LOG_TARGET_CONFIG, "Unable to load config {:?}: {e}", config_path());
@@ -46,7 +48,16 @@ pub fn try_load_ui_config(options: &Options) -> Option<AlacrittyConfig> {
     // Override config with CLI options.
     options.override_config(&mut alacritty_cfg);
 
-    Some(alacritty_cfg)
+    let key = cfg.bindings.1;
+    let action = GlobalAction::Window(WindowAction::Toggle);
+
+    if let Some((_, a)) = cfg.bindings.0.iter_mut().find(|(k, _)| *k == key) {
+        *a = action;
+    } else {
+        cfg.bindings.0.push((key, action));
+    }
+
+    Some((alacritty_cfg, cfg.bindings))
 }
 
 pub fn specific_into_alacritty_config(
@@ -104,8 +115,5 @@ pub fn specific_into_alacritty_config(
 // todo: lowpri: make this configurable
 use crate::paths::fzs_path;
 fn default_program() -> Program {
-    Program::WithArgs {
-        program: fzs_path().to_path_buf(),
-        args: vec!["run".into(), "launch".into()],
-    }
+    Program::WithArgs { program: fzs_path().to_path_buf(), args: vec!["run".into(), "main".into()] }
 }

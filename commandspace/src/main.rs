@@ -17,8 +17,8 @@ use std::io::{self, Write};
 use std::path::PathBuf;
 use std::{env, fs};
 
-use cli_boilerplate_automation::bait::{ResultExt, TransformExt};
-use cli_boilerplate_automation::{_dbg, bog};
+use cba::bait::TransformExt;
+use cba::{_dbg, bog};
 use log::info;
 #[cfg(windows)]
 use windows_sys::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole};
@@ -50,7 +50,7 @@ mod window_context;
 
 mod fzl;
 mod global_hotkey;
-mod tray;
+mod global_tray;
 
 mod config_monitor;
 
@@ -60,7 +60,6 @@ mod gl {
 }
 
 use crate::cli::Options;
-use crate::config::global_bindings::GlobalBindings;
 use crate::config_monitor::ConfigMonitor;
 use crate::event::{EventLoopProxy, Processor};
 #[cfg(target_os = "macos")]
@@ -155,15 +154,23 @@ fn alacritty(mut options: Options) -> Result<(), Box<dyn Error>> {
 
     // Load configuration file.
     let (config, general_cfg) = cli::config::load(&mut options);
-    let global_bindings =
-        GlobalBindings::default_binds().modify(|x| x.extend(general_cfg.bindings.0)).modify(|x| {
-            x.push((
-                general_cfg.bindings.1,
-                commandspace_config::global_bindings::GlobalAction::Window(
-                    commandspace_config::action::WindowAction::Toggle,
-                ),
-            ))
-        });
+    let lost_focus_ignore_duration = general_cfg.misc.lost_focus_ignore_duration;
+
+    let general_cfg = std::sync::Arc::new(general_cfg);
+
+    // Start clipboard logger.
+    let cb_path = general_cfg.clipboard_db();
+    let cb_config = general_cfg.clipboard.clone();
+    std::thread::spawn(move || clipboard_logger::run_logger_sync(cb_path, cb_config));
+
+    let global_bindings = general_cfg.bindings.0.clone().modify(|x| {
+        x.push((
+            general_cfg.bindings.1,
+            commandspace_config::global_bindings::GlobalAction::Window(
+                commandspace_config::action::WindowAction::Toggle,
+            ),
+        ))
+    });
 
     _dbg!(&config.window);
 
@@ -194,12 +201,12 @@ fn alacritty(mut options: Options) -> Result<(), Box<dyn Error>> {
     let _files = TemporaryFiles { log_file: log_cleanup };
 
     // hotkey manager
-    let _hotkey_manager = global_hotkey::init_hotkeys(global_bindings, proxy.clone())
-        .prefix("Unable to initialize hotkeys")
-        ._elog();
+    let (hotkey_tx, hotkey_rx) = tokio::sync::watch::channel(global_bindings);
+    crate::global_hotkey::start_hotkeys_task(hotkey_rx, proxy.clone());
 
     // Event processor.
-    let processor = Processor::new(config, options, &window_event_loop, proxy, rx);
+    let extra = Extra { hotkey_tx, lost_focus_ignore_duration };
+    let processor = Processor::new(config, options, &window_event_loop, proxy, rx, extra);
 
     // Start event loop and block until shutdown.
     let result = processor.run(window_event_loop);
@@ -207,4 +214,9 @@ fn alacritty(mut options: Options) -> Result<(), Box<dyn Error>> {
     info!("Goodbye");
 
     result
+}
+
+pub struct Extra {
+    pub hotkey_tx: tokio::sync::watch::Sender<crate::config::global_bindings::GlobalBindingsMap>,
+    pub lost_focus_ignore_duration: std::time::Duration,
 }

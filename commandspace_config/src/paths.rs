@@ -1,4 +1,4 @@
-use cli_boilerplate_automation::{bath::root_dir, bog::BogUnwrapExt, expr_as_path_fn};
+use cba::{bath::root_dir, bog::BogUnwrapExt, expr_as_path_fn};
 use std::{ffi::OsString, path::PathBuf};
 
 pub static BINARY_FULL: &str = "commandspace";
@@ -62,7 +62,10 @@ pub fn maybe_fzs_path() -> Option<PathBuf> {
     // return a cached (static) result
     // in app, the path should be fixed.
     // non_app usage is not a priority so we just use which.
-    which::which("fzs2").ok()
+    which::which("fzs").map_err(|e| eprintln!("{e}")).ok()
 }
 
-expr_as_path_fn!(fzs_path, maybe_fzs_path().unwrap());
+expr_as_path_fn!(
+    fzs_path,
+    maybe_fzs_path().unwrap_or(PathBuf::from("/home/archr/local/paths/hacks/fzs"))
+);

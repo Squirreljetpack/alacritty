@@ -21,3 +21,8 @@
 
 ## UI
 Better radius
+
+
+1. Initialize at 20 lines
+2. No default fonts
+3. Check if mac detects keyboard shortcuts across all workspaces or if window creation is failing

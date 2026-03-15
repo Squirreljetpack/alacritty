@@ -5,7 +5,7 @@ use crate::{
     event::{Event, EventLoopProxy},
 };
 use alacritty_terminal::event::Event as TerminalEvent;
-use cli_boilerplate_automation::broc::CommandExt;
+use cba::broc::CommandExt;
 use commandspace_config::paths::settings_command;
 use thiserror::Error;
 use tray_icon::{
