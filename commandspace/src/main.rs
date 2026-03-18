@@ -196,6 +196,8 @@ fn alacritty(mut options: Options) -> Result<(), Box<dyn Error>> {
     #[cfg(target_os = "macos")]
     macos::disable_autofill();
 
+    setup_autolaunch(&general_cfg);
+
     // Setup automatic RAII cleanup for our files.
     let log_cleanup = log_file.filter(|_| !config.debug.persistent_logging);
     let _files = TemporaryFiles { log_file: log_cleanup };
@@ -214,6 +216,49 @@ fn alacritty(mut options: Options) -> Result<(), Box<dyn Error>> {
     info!("Goodbye");
 
     result
+}
+
+fn setup_autolaunch(config: &config::Config) {
+    let app_name = "CommandSpace";
+    let app_path = match env::current_exe() {
+        Ok(path) => {
+            #[cfg(target_os = "macos")]
+            {
+                // On macOS, if we're in a bundle, current_exe is .../CommandSpace.app/Contents/MacOS/commandspace
+                // auto-launch works better with the .app path.
+                if path.to_string_lossy().contains(".app/Contents/MacOS/") {
+                    path.parent()
+                        .and_then(|p| p.parent())
+                        .and_then(|p| p.parent())
+                        .map(|p| p.to_path_buf())
+                        .unwrap_or(path)
+                } else {
+                    path
+                }
+            }
+            #[cfg(not(target_os = "macos"))]
+            path
+        },
+        Err(_) => return,
+    };
+
+    let auto = match auto_launch::AutoLaunchBuilder::new()
+        .set_app_name(app_name)
+        .set_app_path(&app_path.to_string_lossy())
+        .set_use_launch_agent(true)
+        .build()
+    {
+        Ok(auto) => auto,
+        Err(_) => return,
+    };
+
+    if config.misc.start_at_login {
+        if !auto.is_enabled().unwrap_or(false) {
+            let _ = auto.enable();
+        }
+    } else if auto.is_enabled().unwrap_or(false) {
+        let _ = auto.disable();
+    }
 }
 
 pub struct Extra {

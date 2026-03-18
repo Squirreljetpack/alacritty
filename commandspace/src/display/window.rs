@@ -24,7 +24,7 @@ use winit::window::{
 #[cfg(target_os = "macos")]
 use {
     objc2::MainThreadMarker,
-    objc2_app_kit::{NSColorSpace, NSView},
+    objc2_app_kit::{NSApplication, NSColorSpace, NSView},
     winit::platform::macos::{OptionAsAlt, WindowAttributesMacOS, WindowExtMacOS},
 };
 #[cfg(not(any(target_os = "macos", windows)))]
@@ -225,7 +225,8 @@ impl Window {
 
                 let behavior = NSWindowCollectionBehavior::CanJoinAllSpaces
                     | NSWindowCollectionBehavior::Stationary
-                    | NSWindowCollectionBehavior::Transient;
+                    | NSWindowCollectionBehavior::FullScreenAuxiliary
+                    | NSWindowCollectionBehavior::IgnoresCycle;
 
                 ns_window.setCollectionBehavior(behavior);
                 // This prevents rendering artifacts from showing up when the window is transparent.
@@ -418,6 +419,13 @@ impl Window {
         self.window.set_visible(visibility);
         // todo: check if this should be universally set in ::Occluded
         if visibility {
+            #[cfg(target_os = "macos")]
+            {
+                let mtm = MainThreadMarker::new().expect("set_visible must be called on main thread");
+                let app = NSApplication::sharedApplication(mtm);
+                app.activate();
+            }
+
             self.window.focus_window();
             #[cfg(all(feature = "x11", not(any(target_os = "macos", windows))))]
             {

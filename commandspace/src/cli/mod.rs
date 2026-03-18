@@ -29,6 +29,10 @@ pub struct Options {
     /// Increases the level of verbosity (the max level is -vvv).
     #[clap(short, conflicts_with("quiet"), action = ArgAction::Count)]
     verbose: u8,
+
+    /// Show the window on start.
+    #[clap(long)]
+    pub show_on_start: bool,
 }
 
 impl Options {

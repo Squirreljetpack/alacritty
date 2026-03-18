@@ -61,6 +61,7 @@
   x11rb                   = { version = "0.13.2", optional = true }
 
   global-hotkey = "0.7.0"
+  auto-launch = "0.5.0"
 
 [build-dependencies]
   gl_generator = "0.14.0"

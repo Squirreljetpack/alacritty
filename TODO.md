@@ -1,28 +1,22 @@
-## Global hotkey
-
-- Center
-- Hide on click away (toggleable)
-
-## Task tray
-
-## Simplify configuration
-
-- [x] No decorations, no tabs
-- No subcommands?
-- Remove WindowIdentity?
-- Figure out what you need to pass to new windows: command and anything else, and how to support that from cli.
-
 ## Redo configurations
 - Need to make binding serialize/deserializable from scratch, using library codes for easier maintenance.
 - Need to include mode-awareness.
 
 ## Change logo/name/plists
-
-
-## UI
-Better radius
-
-
 1. Initialize at 20 lines
 2. No default fonts
 3. Check if mac detects keyboard shortcuts across all workspaces or if window creation is failing
+
+# P2
+1. Download UI
+2. More robust hotkeys + validation
+3. Non-toggle hotkey fails do not crash initialization
+4. Default UI
+5. Usage graph
+6. Code signing + downloads
+7. Figure out correct way to achieve fzs integration
+
+# P3
+Tabs
+New window options beyond command(?)
+Hardcode WindowIdentity?

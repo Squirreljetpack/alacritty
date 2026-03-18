@@ -34,8 +34,10 @@
     <string>CommandSpace</string>
     <key>NSRequiresAquaSystemAppearance</key>
     <string>NO</string>
-    <key>LSBackgroundOnly</key>
+    <key>LSUIElement</key>
     <string>1</string>
+    <key>LSBackgroundOnly</key>
+    <string>0</string>
     <key>NSAppleEventsUsageDescription</key>
     <string>An application in CommandSpace would like to access AppleScript.</string>
     <key>NSCalendarsUsageDescription</key>

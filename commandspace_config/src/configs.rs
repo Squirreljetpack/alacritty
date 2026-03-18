@@ -173,10 +173,15 @@ pub struct Download {}
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Misc {
     pub lost_focus_ignore_duration: Duration,
+    #[serde(default)]
+    pub start_at_login: bool,
 }
 impl Default for Misc {
     fn default() -> Self {
-        Self { lost_focus_ignore_duration: Duration::from_millis(200) }
+        Self {
+            lost_focus_ignore_duration: Duration::from_millis(200),
+            start_at_login: false,
+        }
     }
 }
 

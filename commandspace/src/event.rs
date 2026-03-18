@@ -263,6 +263,10 @@ impl ApplicationHandler for Processor {
             self.tray = global_tray::init_tray(self.proxy.clone()).ok();
         }
 
+        if self.cli_options.show_on_start {
+            let _ = self.proxy.send_event(Event::new(EventType::CreateWindow, None));
+        }
+
         // We have to request a redraw here to have the icon actually show up.
         // Winit only exposes a redraw method on the Window so we use core-foundation directly.
         #[cfg(target_os = "macos")]
@@ -2027,7 +2031,9 @@ impl input::Processor<EventProxy, ActionContext<'_, Notifier, EventProxy>> {
 
                         // note that pressing hotkey can cause it to become unfocused
                         if is_focused {
-                            self.ctx.display.visible = true
+                            // we don't set this because window can briefly regain focus after hiding
+                            // we show if either visible or not focused so this has the correct effect
+                            // self.ctx.display.visible = true
                         } else {
                             *LOST_FOCUS.lock() = Some(Instant::now());
                         }
