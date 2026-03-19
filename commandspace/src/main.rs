@@ -153,15 +153,14 @@ fn alacritty(mut options: Options) -> Result<(), Box<dyn Error>> {
     info!("Running on Wayland");
 
     // Load configuration file.
-    let (config, general_cfg) = cli::config::load(&mut options);
+    let (config, general_cfg, cb_cfg) = cli::config::load(&mut options);
     let lost_focus_ignore_duration = general_cfg.misc.lost_focus_ignore_duration;
 
     let general_cfg = std::sync::Arc::new(general_cfg);
 
     // Start clipboard logger.
     let cb_path = general_cfg.clipboard_db();
-    let cb_config = general_cfg.clipboard.clone();
-    std::thread::spawn(move || clipboard_logger::run_logger_sync(cb_path, cb_config));
+    std::thread::spawn(move || mm_clipboard_server::run_logger_sync(cb_path, cb_cfg));
 
     let global_bindings = general_cfg.bindings.0.clone().modify(|x| {
         x.push((

@@ -31,6 +31,6 @@
     strum_macros            = "0.28.0"
     strum                   = { version = "0.28.0", features = [ "strum_macros" ] }
 
-[dependencies.clipboard_logger]
-    path    = "../../clipboard_logger"
+[dependencies.mm-clipboard-server]
+    path    = "../../mm_clipboard/server"
     version = "0"

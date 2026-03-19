@@ -1,8 +1,10 @@
-use cba::bo::{load_type, load_type_or_default};
+use cba::bo::{load_type, load_type_or_default_log};
 use cba::unwrap;
 use commandspace_config::LOG_TARGET_CONFIG;
 use commandspace_config::action::WindowAction;
 use commandspace_config::global_bindings::{GlobalAction, GlobalBindings};
+use commandspace_config::paths::cb_config_path;
+use mm_clipboard_config::ServerConfig;
 
 use crate::cli::Options;
 
@@ -13,10 +15,13 @@ use crate::config::types::Program;
 use crate::paths::{alacritty_config_path, config_path};
 
 /// Load the configuration file.
-pub fn load(options: &mut Options) -> (AlacrittyConfig, Config) {
+pub fn load(options: &mut Options) -> (AlacrittyConfig, Config, ServerConfig) {
     let specific_cfg: AlacrittyConfigSpecific =
-        load_type_or_default(alacritty_config_path(), |s| toml::from_str(s));
-    let cfg: Config = load_type_or_default(config_path(), |s| toml::from_str(s));
+        load_type_or_default_log(alacritty_config_path(), |s| toml::from_str(s));
+    let cfg: Config = load_type_or_default_log(config_path(), |s| toml::from_str(s));
+
+    let cb_cfg: mm_clipboard_config::Config =
+        load_type_or_default_log(cb_config_path(), |s| toml::from_str(s));
 
     // cfg.alacritty remains in the main cfg
     let mut alacritty_cfg = specific_into_alacritty_config(specific_cfg, cfg.alacritty.clone());
@@ -24,7 +29,7 @@ pub fn load(options: &mut Options) -> (AlacrittyConfig, Config) {
     // Override config with CLI options.
     options.override_config(&mut alacritty_cfg);
 
-    (alacritty_cfg, cfg)
+    (alacritty_cfg, cfg, cb_cfg.server)
 }
 
 pub fn try_load_ui_config(options: &Options) -> Option<(AlacrittyConfig, GlobalBindings)> {

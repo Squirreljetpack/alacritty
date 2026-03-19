@@ -28,15 +28,17 @@
 
 [dependencies]
   cli_boilerplate_automation = { version = "0" }
-  clipboard_logger           = { path = "../../clipboard_logger" }
-  tokio                      = { version = "1.49.0", features = ["full"] }
-  gtk                        = "0.18.2"
-  keyboard-types.workspace   = true
-  easy-ext                   = "1.0.2"
-  dirs                       = "6.0.0"
-  which                      = "8.0.0"
-  tray-icon                  = "0.21.3"
-  image                      = { version = "0.25.9", default-features = false, features = [ "png" ] }
+  mm-clipboard-server        = { path = "../../mm_clipboard/server" }
+  mm-clipboard-config        = { path = "../../mm_clipboard/config" }
+
+  tokio                    = { version = "1.49.0", features = [ "full" ] }
+  gtk                      = "0.18.2"
+  keyboard-types.workspace = true
+  easy-ext                 = "1.0.2"
+  dirs                     = "6.0.0"
+  which                    = "8.0.0"
+  tray-icon                = "0.21.3"
+  image                    = { version = "0.25.9", default-features = false, features = [ "png" ] }
 
   ahash                   = { version = "0.8.6", features = [ "no-rng" ] }
   bitflags.workspace      = true
@@ -61,7 +63,7 @@
   x11rb                   = { version = "0.13.2", optional = true }
 
   global-hotkey = "0.7.0"
-  auto-launch = "0.5.0"
+  auto-launch   = "0.5.0"
 
 [build-dependencies]
   gl_generator = "0.14.0"

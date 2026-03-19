@@ -48,6 +48,9 @@ pub fn current_exe() -> std::ffi::OsString {
 expr_as_path_fn!(__home, dirs::home_dir().unwrap_or(root_dir()));
 
 // ---------------------- FILES ----------------------
+
+expr_as_path_fn!(cb_config_path, config_dir().join("cb.toml"));
+
 #[cfg(debug_assertions)]
 expr_as_path_fn!(config_path, config_dir().join("dev.toml"));
 #[cfg(not(debug_assertions))]

@@ -144,7 +144,6 @@ pub struct Config {
     pub misc: Misc,
 
     pub data_dir: PathBuf,
-    pub clipboard: clipboard_logger::Config,
 }
 
 impl Default for Config {
@@ -156,7 +155,6 @@ impl Default for Config {
             misc: Default::default(),
             stats: Default::default(),
             data_dir: crate::paths::state_dir(),
-            clipboard: Default::default(),
         }
     }
 }
@@ -178,10 +176,7 @@ pub struct Misc {
 }
 impl Default for Misc {
     fn default() -> Self {
-        Self {
-            lost_focus_ignore_duration: Duration::from_millis(200),
-            start_at_login: false,
-        }
+        Self { lost_focus_ignore_duration: Duration::from_millis(200), start_at_login: false }
     }
 }
 
