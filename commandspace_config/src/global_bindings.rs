@@ -2,13 +2,6 @@ use keyboard_types::{Code, Modifiers};
 
 use crate::action::WindowAction;
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
-pub struct GlobalBinding {
-    action: GlobalAction,
-    #[serde(flatten)]
-    hotkey: HotKey,
-}
-
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct HotKey {
     pub mods: Modifiers,
