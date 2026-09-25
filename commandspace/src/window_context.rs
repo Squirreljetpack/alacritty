@@ -285,13 +285,13 @@ impl WindowContext {
             self.display.window.set_title(self.config.window.identity.title.clone());
         }
 
-        let opaque = self.config.window_opacity() >= 1.;
+        let transparent = self.config.window_opacity() < 1. || self.config.window.radius > 0;
 
         #[cfg(target_os = "macos")]
         self.display.window.set_option_as_alt(self.config.window.option_as_alt());
 
         // Change opacity and blur state.
-        self.display.window.set_transparent(!opaque);
+        self.display.window.set_transparent(transparent);
         self.display.window.set_blur(self.config.window.blur);
 
         // Update hint keys.

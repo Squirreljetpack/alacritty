@@ -171,7 +171,7 @@ impl Window {
         window.set_ime_purpose(ImePurpose::Terminal);
 
         // Set initial transparency hint.
-        window.set_transparent(config.window_opacity() < 1.);
+        window.set_transparent(config.window_opacity() < 1. || config.window.radius > 0);
 
         if let Err(e) = Self::initialize_platform_window_handle(
             &*window,
