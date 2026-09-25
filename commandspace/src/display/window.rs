@@ -229,8 +229,7 @@ impl Window {
                     | NSWindowCollectionBehavior::IgnoresCycle;
 
                 ns_window.setCollectionBehavior(behavior);
-                // This prevents rendering artifacts from showing up when the window is transparent.
-                ns_window.setHasShadow(false);
+                ns_window.setHasShadow(true);
             },
 
             // --- Windows (Win32) ---

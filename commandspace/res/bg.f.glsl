@@ -14,6 +14,7 @@ uniform vec4 bgColor;
 uniform vec4 frameColor;
 uniform float frameOffset;
 uniform float frameThickness;
+uniform float directionalLighting;
 
 // Signed distance to a rounded rectangle
 // p: position relative to center in pixels
@@ -51,7 +52,8 @@ void main()
         float stroke_d = abs(frame_d + frameThickness * 0.5) - frameThickness * 0.5;
         
         float frame_aa = 1.0 - smoothstep(-0.5, 0.5, stroke_d);
-        float factor = frame_aa * frameColor.a;
+        float light_factor = directionalLighting > 0.5 ? clamp(1.0 + pos.y * 0.20, 0.65, 1.35) : 1.0;
+        float factor = frame_aa * clamp(frameColor.a * light_factor, 0.0, 1.0);
         
         // Blend frame on top of background
         color.rgb = mix(color.rgb, frameColor.rgb, factor);

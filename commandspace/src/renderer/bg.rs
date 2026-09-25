@@ -113,6 +113,7 @@ pub struct BgShaderProgram {
     u_frame_color: Option<GLint>,
     u_frame_offset: Option<GLint>,
     u_frame_thickness: Option<GLint>,
+    u_directional_lighting: Option<GLint>,
 }
 
 impl BgShaderProgram {
@@ -126,6 +127,7 @@ impl BgShaderProgram {
             u_frame_color: program.get_uniform_location(c"frameColor").ok(),
             u_frame_offset: program.get_uniform_location(c"frameOffset").ok(),
             u_frame_thickness: program.get_uniform_location(c"frameThickness").ok(),
+            u_directional_lighting: program.get_uniform_location(c"directionalLighting").ok(),
             program,
         })
     }
@@ -169,6 +171,12 @@ impl BgShaderProgram {
             }
             if let Some(u_frame_thickness) = self.u_frame_thickness {
                 gl::Uniform1f(u_frame_thickness, info.frame_thickness);
+            }
+            if let Some(u_directional_lighting) = self.u_directional_lighting {
+                gl::Uniform1f(
+                    u_directional_lighting,
+                    if info.directional_lighting { 1.0 } else { 0.0 },
+                );
             }
         }
     }

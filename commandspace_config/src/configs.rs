@@ -107,6 +107,7 @@ impl AlacrittyConfig {
             frame_alpha: self.window.frame.opacity.as_f32(),
             frame_offset: self.window.frame.offset * scale_factor,
             frame_thickness: self.window.frame.thickness * scale_factor,
+            directional_lighting: self.window.frame.directional_lighting,
         }
     }
 

@@ -29,11 +29,20 @@ pub struct FrameConfig {
 
     /// Frame opacity from 0.0 to 1.0.
     pub opacity: Percentage,
+
+    /// Directional ambient lighting gradient on the frame stroke.
+    pub directional_lighting: bool,
 }
 
 impl Default for FrameConfig {
     fn default() -> Self {
-        Self { thickness: 0.0, offset: 0.0, color: Default::default(), opacity: Default::default() }
+        Self {
+            thickness: 0.0,
+            offset: 0.0,
+            color: Default::default(),
+            opacity: Default::default(),
+            directional_lighting: true,
+        }
     }
 }
 
@@ -71,7 +80,7 @@ pub struct WindowConfig {
 impl Default for WindowConfig {
     fn default() -> Self {
         Self {
-            blur: Default::default(),
+            blur: true,
             padding: Default::default(),
             radius: 5,
             frame: Default::default(),

@@ -9,4 +9,5 @@ pub struct BgConfig {
     pub frame_alpha: f32,
     pub frame_offset: f32,
     pub frame_thickness: f32,
+    pub directional_lighting: bool,
 }
