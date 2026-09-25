@@ -7,6 +7,9 @@
 2. No default fonts
 3. Check if mac detects keyboard shortcuts across all workspaces or if window creation is failing
 
+Clipboard config: store a config file path + deserialize a struct.
+Clipboard page: options + filepath. Setting filepath: validate before saving.
+
 # P2
 1. Download UI
 2. More robust hotkeys + validation
@@ -20,3 +23,4 @@
 Tabs
 New window options beyond command(?)
 Hardcode WindowIdentity?
+cs shrink text cmd

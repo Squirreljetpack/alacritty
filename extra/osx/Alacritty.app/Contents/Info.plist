@@ -62,5 +62,10 @@
     <string>An application in CommandSpace requires elevated permissions.</string>
     <key>NSBluetoothAlwaysUsageDescription</key>
     <string>An application in CommandSpace wants to use Bluetooth.</string>
+    
+    <key>NSAccessibilityUsageDescription</key>
+    <string>An application in CommandSpace needs accessibility access to control and switch between windows.</string>
+    <key>NSScreenCaptureDescription</key>
+    <string>An application in CommandSpace needs screen recording access to read window information.</string>
   </dict>
 </plist>
