@@ -7,7 +7,8 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use cba::bo::write_str;
-use chrono::{Duration, Local, NaiveDate};
+use jiff::civil::Date;
+use jiff::{Span, Zoned};
 use log::warn;
 use serde::{Deserialize, Serialize};
 
@@ -80,22 +81,22 @@ impl Stats {
 
     /// Record that a terminal window has been opened.
     pub fn record_window(&mut self) {
-        let today = Local::now().date_naive();
+        let today = Zoned::now().date();
 
         self.total = self.total.saturating_add(1);
 
-        let count = self.days.entry(today.format(DATE_FORMAT).to_string()).or_default();
+        let count = self.days.entry(today.strftime(DATE_FORMAT).to_string()).or_default();
         *count = count.saturating_add(1);
 
         self.prune(today);
     }
 
     /// Drop the days that fall outside the retention window.
-    fn prune(&mut self, today: NaiveDate) {
-        let oldest = today - Duration::days(KEEP_DAYS - 1);
+    fn prune(&mut self, today: Date) {
+        let oldest = today.checked_sub(Span::new().days(KEEP_DAYS - 1)).unwrap_or(Date::MIN);
 
         self.days.retain(|day, _| {
-            NaiveDate::parse_from_str(day, DATE_FORMAT).map(|date| date >= oldest).unwrap_or(false)
+            Date::strptime(DATE_FORMAT, day).map(|date| date >= oldest).unwrap_or(false)
         });
     }
 }
