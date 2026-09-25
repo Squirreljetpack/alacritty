@@ -13,7 +13,7 @@ use notify::{
 use alacritty_terminal::thread;
 
 use crate::event::{Event, EventLoopProxy, EventType};
-use crate::paths::{config_dir, config_path};
+use crate::paths::{alacritty_config_path, config_dir, config_path};
 
 const DEBOUNCE_DELAY: Duration = Duration::from_millis(10);
 
@@ -92,9 +92,9 @@ impl ConfigMonitor {
                         if received_events
                             .drain(..)
                             .flat_map(|event| event.paths.into_iter())
-                            .any(|path| path == config_path())
+                            .any(|path| path == config_path() || path == alacritty_config_path())
                         {
-                            // Always reload the primary configuration file.
+                            // Always reload the configuration files.
                             let event = Event::new(EventType::ConfigReload, None);
                             event_proxy.send_event(event);
                         }

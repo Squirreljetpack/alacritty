@@ -139,8 +139,6 @@ pub struct Config {
     #[serde(flatten)]
     pub alacritty: AlacrittyConfigGeneral,
     pub bindings: GlobalBindings,
-    pub download: Download,
-    pub stats: Stats,
     pub misc: Misc,
 
     pub data_dir: PathBuf,
@@ -151,9 +149,7 @@ impl Default for Config {
         Self {
             alacritty: Default::default(),
             bindings: Default::default(),
-            download: Default::default(),
             misc: Default::default(),
-            stats: Default::default(),
             data_dir: crate::paths::state_dir(),
         }
     }
@@ -165,9 +161,6 @@ impl Config {
     }
 }
 
-#[derive(Deserialize, Serialize, Default, Debug, Clone)]
-pub struct Download {}
-
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Misc {
     pub lost_focus_ignore_duration: Duration,
@@ -178,11 +171,6 @@ impl Default for Misc {
     fn default() -> Self {
         Self { lost_focus_ignore_duration: Duration::from_millis(200), start_at_login: false }
     }
-}
-
-#[derive(Deserialize, Serialize, Default, Debug, Clone)]
-pub struct Stats {
-    pub count: u8,
 }
 
 /// The alacritty object deserialized from the main commandspace config file
@@ -203,7 +191,7 @@ pub struct AlacrittyConfigGeneral {
 
 /// Alacritty settings which should be set manually in the alacritty.toml
 #[derive(Deserialize, Serialize, Default, Clone, Debug)]
-#[serde(deny_unknown_fields, default)]
+#[serde(default)]
 pub struct AlacrittyConfigSpecific {
     pub mouse: Mouse,
     pub bell: BellConfig,

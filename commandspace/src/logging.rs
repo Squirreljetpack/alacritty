@@ -48,6 +48,8 @@ const ALLOWED_TARGETS: &[&str] = &[
     "alacritty_terminal",
     env!("CARGO_PKG_NAME"),
     "crossfont",
+    // Config and file IO in `cli_boilerplate_automation`.
+    "cba",
 ];
 
 /// Initialize the logger to its defaults.
