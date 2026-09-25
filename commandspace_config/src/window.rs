@@ -91,37 +91,9 @@ impl Default for WindowConfig {
 
 impl WindowConfig {
     #[inline]
-    // pub fn dimensions(&self) -> Dimensions {
-    //     let (lines, columns) = (self.dimensions.lines, self.dimensions.columns);
-    //     let (lines_is_non_zero, columns_is_non_zero) = (lines != 0, columns != 0);
-
-    //     if lines_is_non_zero && columns_is_non_zero {
-    //         // Return dimensions if both `lines` and `columns` are non-zero.
-    //         return self.dimensions;
-    //     } else if lines_is_non_zero || columns_is_non_zero {
-    //         // Warn if either `columns` or `lines` is non-zero.
-
-    //         let (zero_key, non_zero_key, non_zero_value) = if lines_is_non_zero {
-    //             ("columns", "lines", lines)
-    //         } else {
-    //             ("lines", "columns", columns)
-    //         };
-
-    //         warn!(
-    //             target: LOG_TARGET_CONFIG,
-    //             "Both `lines` and `columns` must be non-zero for `window.dimensions` to take \
-    //              effect. Configured value of `{zero_key}` is 0 while that of `{non_zero_key}` is {non_zero_value}",
-    //         );
-    //     };
-    //     Dimensions { columns: 80, lines: 25 }
-    // }
     pub fn dimensions(&self) -> Dimensions {
         let lines = self.dimensions.lines;
         let columns = self.dimensions.columns;
-
-        if lines == 0 && columns == 0 {
-            return self.dimensions;
-        }
 
         Dimensions {
             lines: if lines == 0 { 25 } else { lines },
