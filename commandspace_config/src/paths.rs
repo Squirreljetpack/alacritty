@@ -1,4 +1,4 @@
-use cba::{bath::root_dir, bog::BogUnwrapExt, expr_as_path_fn};
+use cba::{bath::find_root, bog::BogUnwrapExt, expr_as_path_fn};
 use std::{ffi::OsString, path::PathBuf};
 
 pub static BINARY_FULL: &str = "commandspace";
@@ -45,7 +45,7 @@ pub fn current_exe() -> std::ffi::OsString {
 }
 
 // the absolute home directory, or root
-expr_as_path_fn!(__home, dirs::home_dir().unwrap_or(root_dir()));
+expr_as_path_fn!(__home, dirs::home_dir().or_else(find_root).unwrap_or_else(|| PathBuf::from(std::path::MAIN_SEPARATOR_STR)));
 
 // ---------------------- FILES ----------------------
 
