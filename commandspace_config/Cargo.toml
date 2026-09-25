@@ -19,6 +19,7 @@
     log            = { version = "0.4", features = [ "std", "serde" ] }
     serde          = { version = "1", features = [ "derive" ] }
     toml.workspace = true
+    chrono         = { version = "0.4.43", default-features = false, features = [ "clock" ] }
 
     # paths
     cli_boilerplate_automation = "0"
