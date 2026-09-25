@@ -46,14 +46,29 @@ mod inner {
                 .expect("Failed to create tokio runtime for hotkeys");
 
             rt.block_on(async move {
-                let mut _current_manager: Option<GlobalHotKeyManager> = None;
+                let manager = match GlobalHotKeyManager::new() {
+                    Ok(manager) => manager,
+                    Err(e) => {
+                        log::error!("Failed to initialize hotkeys: {:?}", e);
+                        return;
+                    },
+                };
+                let mut registered = Vec::new();
 
                 loop {
                     let bindings = receiver.borrow_and_update().clone();
 
-                    match init_hotkeys_internal(bindings) {
-                        Ok((manager, map)) => {
-                            _current_manager = Some(manager);
+                    // Release the previous hotkeys before taking them again: registering a key that
+                    // this process still holds fails with `AlreadyRegistered`.
+                    if !registered.is_empty() {
+                        if let Err(e) = manager.unregister_all(&registered) {
+                            log::error!("Failed to release hotkeys: {:?}", e);
+                        }
+                        registered.clear();
+                    }
+
+                    match register_hotkeys(&manager, &mut registered, bindings) {
+                        Ok(map) => {
                             *bindings_map.lock() = map;
                             log::info!("Global hotkeys updated successfully");
                         },
@@ -70,21 +85,23 @@ mod inner {
         });
     }
 
-    fn init_hotkeys_internal(
+    fn register_hotkeys(
+        manager: &GlobalHotKeyManager,
+        registered: &mut Vec<HotKey>,
         bindings: GlobalBindingsMap,
-    ) -> global_hotkey::Result<(GlobalHotKeyManager, Vec<(u32, GlobalAction)>)> {
-        let hotkeys_manager = GlobalHotKeyManager::new()?;
+    ) -> global_hotkey::Result<Vec<(u32, GlobalAction)>> {
         let mut hk_binds = Vec::new();
 
         for (hotkey, action) in bindings {
             let mods = hotkey.mods;
             let code = hotkey.key;
             let hk = HotKey::new(Some(mods), code);
-            hotkeys_manager.register(hk)?;
+            manager.register(hk)?;
+            registered.push(hk);
             hk_binds.push((hk.id(), action));
         }
 
-        Ok((hotkeys_manager, hk_binds))
+        Ok(hk_binds)
     }
 
     // pub fn init_hotkeys(
