@@ -230,6 +230,7 @@ impl Window {
 
                 ns_window.setCollectionBehavior(behavior);
                 ns_window.setHasShadow(true);
+                ns_window.setLevel(objc2_app_kit::NSStatusWindowLevel);
             },
 
             // --- Windows (Win32) ---
@@ -420,6 +421,17 @@ impl Window {
         if visibility {
             #[cfg(target_os = "macos")]
             {
+                use objc2_app_kit::NSView;
+                if let Ok(handle) = self.window.window_handle() {
+                    if let RawWindowHandle::AppKit(appkit_handle) = handle.as_raw() {
+                        unsafe {
+                            let view = appkit_handle.ns_view.cast::<NSView>().as_ref();
+                            if let Some(ns_window) = view.window() {
+                                ns_window.orderFrontRegardless();
+                            }
+                        }
+                    }
+                }
                 let mtm =
                     MainThreadMarker::new().expect("set_visible must be called on main thread");
                 let app = NSApplication::sharedApplication(mtm);
