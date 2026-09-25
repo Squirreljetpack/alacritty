@@ -65,7 +65,7 @@ pub fn set_handler(event_proxy: EventLoopProxy, ids: MenuIds) {
         log::trace!("Received Menu Event {}.", event.id().0);
         if event.id == toggle {
             event_proxy.send_event(Event::new(
-                crate::event::EventType::Window(WindowAction::ToggleMaximized),
+                crate::event::EventType::Window(WindowAction::Toggle),
                 None,
             ));
         } else if event.id == settings {
