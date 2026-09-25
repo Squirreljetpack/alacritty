@@ -86,8 +86,7 @@ impl AlacrittyConfig {
     pub fn pty_config(&self) -> PtyOptions {
         let shell = self.terminal.shell.clone().map(Into::into);
         // todo: understand then fold home_dir default into WorkingDir wrapper struct
-        let working_directory =
-            self.terminal.working_directory.clone().or_else(|| std::env::home_dir());
+        let working_directory = self.terminal.working_directory.clone().or_else(std::env::home_dir);
         PtyOptions {
             working_directory,
             shell,
@@ -158,6 +157,10 @@ impl Default for Config {
 impl Config {
     pub fn clipboard_db(&self) -> PathBuf {
         self.data_dir.join("clipboard.db")
+    }
+
+    pub fn stats_path(&self) -> PathBuf {
+        self.data_dir.join("stats.toml")
     }
 }
 

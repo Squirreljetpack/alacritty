@@ -13,6 +13,7 @@ pub mod rgb;
 pub mod scrolling;
 pub mod selection;
 pub mod serde_utils;
+pub mod stats;
 pub mod terminal;
 pub mod types;
 pub mod window;

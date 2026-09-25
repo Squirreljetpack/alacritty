@@ -47,7 +47,7 @@ impl BgRenderer {
                 gl::FLOAT,
                 gl::FALSE,
                 mem::size_of::<Vertex>() as i32,
-                0 as *const _, // offset 0
+                std::ptr::null(), // offset 0
             );
             gl::EnableVertexAttribArray(0);
 

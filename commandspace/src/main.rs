@@ -206,7 +206,11 @@ fn alacritty(mut options: Options) -> Result<(), Box<dyn Error>> {
     crate::global_hotkey::start_hotkeys_task(hotkey_rx, proxy.clone());
 
     // Event processor.
-    let extra = Extra { hotkey_tx, lost_focus_ignore_duration };
+    let extra = Extra {
+        hotkey_tx,
+        lost_focus_ignore_duration,
+        stats_path: general_cfg.stats_path(),
+    };
     let processor = Processor::new(config, options, &window_event_loop, proxy, rx, extra);
 
     // Start event loop and block until shutdown.
@@ -263,4 +267,5 @@ fn setup_autolaunch(config: &config::Config) {
 pub struct Extra {
     pub hotkey_tx: tokio::sync::watch::Sender<crate::config::global_bindings::GlobalBindingsMap>,
     pub lost_focus_ignore_duration: std::time::Duration,
+    pub stats_path: PathBuf,
 }

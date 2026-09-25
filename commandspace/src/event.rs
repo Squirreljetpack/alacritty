@@ -57,6 +57,7 @@ use crate::clipboard::Clipboard;
 use crate::config::AlacrittyConfig;
 use crate::config::action::WindowAction;
 use crate::config::hint::{HintAction, HintInternalAction};
+use crate::config::stats::Stats;
 use crate::daemon::spawn_daemon;
 use crate::display::color::Rgb;
 use crate::display::hint::HintMatch;
@@ -163,6 +164,8 @@ impl Processor {
         self.gl_config = Some(window_context.display.gl_context().config());
         self.windows.insert(window_context.id(), window_context);
 
+        self.record_window();
+
         Ok(())
     }
 
@@ -181,7 +184,19 @@ impl Processor {
         )?;
 
         self.windows.insert(window_context.id(), window_context);
+
+        self.record_window();
+
         Ok(())
+    }
+
+    /// Record that a terminal window has been opened.
+    fn record_window(&self) {
+        let path = &self.extra.stats_path;
+
+        let mut stats = Stats::load(path);
+        stats.record_window();
+        stats.save(path);
     }
 
     /// Run the event loop.
@@ -264,7 +279,7 @@ impl ApplicationHandler for Processor {
         }
 
         if self.cli_options.show_on_start {
-            let _ = self.proxy.send_event(Event::new(EventType::CreateWindow, None));
+            self.proxy.send_event(Event::new(EventType::CreateWindow, None));
         }
 
         // We have to request a redraw here to have the icon actually show up.
@@ -390,8 +405,7 @@ impl ApplicationHandler for Processor {
                     // create a window
                     let Some((_id, window_context)) = self.windows.iter_mut().next() else {
                         if matches!(action, WindowAction::Toggle | WindowAction::Focus) {
-                            let _ =
-                                self.proxy.send_event(Event::new(EventType::CreateWindow, None));
+                            self.proxy.send_event(Event::new(EventType::CreateWindow, None));
                         }
                         return;
                     };

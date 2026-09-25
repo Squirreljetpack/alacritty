@@ -63,23 +63,23 @@ pub fn set_handler(event_proxy: EventLoopProxy, ids: MenuIds) {
     let [toggle, settings, close, quit] = ids;
     MenuEvent::set_event_handler(Some(move |event: MenuEvent| {
         log::trace!("Received Menu Event {}.", event.id().0);
-        if event.id == &toggle {
-            let _ = event_proxy.send_event(Event::new(
+        if event.id == toggle {
+            event_proxy.send_event(Event::new(
                 crate::event::EventType::Window(WindowAction::ToggleMaximized),
                 None,
             ));
-        } else if event.id == &settings {
+        } else if event.id == settings {
             let mut cmd = Command::new(settings_command());
             cmd._spawn();
             // let _ =
             //     event_proxy.send_event(Event::new(crate::event::EventType::ShowWindow(None), None));
-        } else if event.id == &close {
-            let _ = event_proxy.send_event(Event::new(
+        } else if event.id == close {
+            event_proxy.send_event(Event::new(
                 crate::event::EventType::Terminal(TerminalEvent::Exit),
                 None,
             ));
-        } else if event.id == &quit {
-            let _ = event_proxy.send_event(Event::new(crate::event::EventType::Quit, None));
+        } else if event.id == quit {
+            event_proxy.send_event(Event::new(crate::event::EventType::Quit, None));
         }
     }));
 }

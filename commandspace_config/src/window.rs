@@ -33,12 +33,7 @@ pub struct FrameConfig {
 
 impl Default for FrameConfig {
     fn default() -> Self {
-        Self {
-            thickness: 0.0,
-            offset: 0.0,
-            color: Default::default(),
-            opacity: Default::default(),
-        }
+        Self { thickness: 0.0, offset: 0.0, color: Default::default(), opacity: Default::default() }
     }
 }
 

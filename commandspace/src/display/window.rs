@@ -421,7 +421,8 @@ impl Window {
         if visibility {
             #[cfg(target_os = "macos")]
             {
-                let mtm = MainThreadMarker::new().expect("set_visible must be called on main thread");
+                let mtm =
+                    MainThreadMarker::new().expect("set_visible must be called on main thread");
                 let app = NSApplication::sharedApplication(mtm);
                 app.activate();
             }

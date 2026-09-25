@@ -45,7 +45,12 @@ pub fn current_exe() -> std::ffi::OsString {
 }
 
 // the absolute home directory, or root
-expr_as_path_fn!(__home, dirs::home_dir().or_else(find_root).unwrap_or_else(|| PathBuf::from(std::path::MAIN_SEPARATOR_STR)));
+expr_as_path_fn!(
+    __home,
+    dirs::home_dir()
+        .or_else(find_root)
+        .unwrap_or_else(|| PathBuf::from(std::path::MAIN_SEPARATOR_STR))
+);
 
 // ---------------------- FILES ----------------------
 
