@@ -28,5 +28,8 @@ pub use bindings::Binding;
 pub use bindings::{BindingKey, BindingMode, KeyBinding, MouseEvent};
 pub use configs::{AlacrittyConfig, Config};
 
-/// Logging target for config error messages.
-pub const LOG_TARGET_CONFIG: &str = "commandspace_config_derive";
+/// Logging target for configuration errors.
+///
+/// The logger matches and prints only the first `:`-separated segment of a target, so this has to stay
+/// a single segment to be recognized as a config message.
+pub const LOG_TARGET_CONFIG: &str = env!("CARGO_PKG_NAME");
