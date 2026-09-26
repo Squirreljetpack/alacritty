@@ -37,27 +37,37 @@ void main()
     // Background rounded rectangle
     float d = sdRoundedRect(p, half_size, radius);
 
-    // Anti-aliasing: smoothstep over 1 pixel
-    float alpha = 1.0 - smoothstep(-0.5, 0.5, d);
-    vec4 color = vec4(bgColor.rgb, bgColor.a * alpha);
+    // Anti-aliasing of the window boundary
+    float window_alpha = 1.0 - smoothstep(-0.5, 0.5, d);
+    if (window_alpha <= 0.0)
+    {
+        FRAG_COLOR = vec4(0.0);
+        return;
+    }
+
+    vec4 color = vec4(bgColor.rgb, bgColor.a * window_alpha);
 
     // Draw frame only if thickness > 0
     if (frameThickness > 0.0)
     {
-        // frameOffset: how much to inset the frame from the edge
-        float frame_d = d + frameOffset;
-        
-        // Stroke distance: abs(distance to boundary) - half_thickness
-        // Centers the stroke at frameOffset pixels from the edge
-        float stroke_d = abs(frame_d + frameThickness * 0.5) - frameThickness * 0.5;
-        
-        float frame_aa = 1.0 - smoothstep(-0.5, 0.5, stroke_d);
         float light_factor = directionalLighting > 0.5 ? clamp(1.0 + pos.y * 0.20, 0.65, 1.35) : 1.0;
-        float factor = frame_aa * clamp(frameColor.a * light_factor, 0.0, 1.0);
-        
-        // Blend frame on top of background
-        color.rgb = mix(color.rgb, frameColor.rgb, factor);
-        color.a = max(color.a, factor);
+        float frame_intensity = clamp(frameColor.a * light_factor, 0.0, 1.0);
+        vec3 stroke_rgb = mix(bgColor.rgb, frameColor.rgb, frame_intensity);
+
+        float stroke_factor = 0.0;
+        if (frameOffset <= 0.0)
+        {
+            float inner_d = -(d + frameThickness);
+            stroke_factor = 1.0 - smoothstep(-0.5, 0.5, inner_d);
+        }
+        else
+        {
+            float stroke_d = max(d + frameOffset, -(d + frameOffset + frameThickness));
+            stroke_factor = 1.0 - smoothstep(-0.5, 0.5, stroke_d);
+        }
+
+        color.rgb = mix(bgColor.rgb, stroke_rgb, stroke_factor);
+        color.a = max(color.a, window_alpha * stroke_factor * frame_intensity);
     }
 
     FRAG_COLOR = color;
