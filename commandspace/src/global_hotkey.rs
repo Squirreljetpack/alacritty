@@ -67,15 +67,10 @@ mod inner {
                         registered.clear();
                     }
 
-                    match register_hotkeys(&manager, &mut registered, bindings) {
-                        Ok(map) => {
-                            *bindings_map.lock() = map;
-                            log::info!("Global hotkeys updated successfully");
-                        },
-                        Err(e) => {
-                            log::error!("Failed to initialize hotkeys: {:?}", e);
-                        },
-                    }
+                    let total = bindings.len();
+                    let map = register_hotkeys(&manager, &mut registered, bindings);
+                    log::info!("Registered {} of {} global hotkeys", map.len(), total);
+                    *bindings_map.lock() = map;
 
                     if receiver.changed().await.is_err() {
                         break;
@@ -85,23 +80,29 @@ mod inner {
         });
     }
 
+    /// Registers every binding it can, logging the keys another client already holds.
     fn register_hotkeys(
         manager: &GlobalHotKeyManager,
         registered: &mut Vec<HotKey>,
         bindings: GlobalBindingsMap,
-    ) -> global_hotkey::Result<Vec<(u32, GlobalAction)>> {
+    ) -> Vec<(u32, GlobalAction)> {
         let mut hk_binds = Vec::new();
 
         for (hotkey, action) in bindings {
             let mods = hotkey.mods;
             let code = hotkey.key;
             let hk = HotKey::new(Some(mods), code);
-            manager.register(hk)?;
-            registered.push(hk);
-            hk_binds.push((hk.id(), action));
+
+            match manager.register(hk) {
+                Ok(()) => {
+                    registered.push(hk);
+                    hk_binds.push((hk.id(), action));
+                },
+                Err(err) => log::error!("Failed to register {hotkey:?}: {err:?}"),
+            }
         }
 
-        Ok(hk_binds)
+        hk_binds
     }
 
     // pub fn init_hotkeys(
