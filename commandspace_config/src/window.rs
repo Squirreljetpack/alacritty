@@ -16,7 +16,7 @@ use super::types::{Delta, Percentage};
 pub const DEFAULT_NAME: &str = "Commandspace";
 
 #[derive(serde::Deserialize, Serialize, Debug, Clone, PartialEq)]
-#[serde(default)]
+#[serde(deny_unknown_fields, default)]
 pub struct FrameConfig {
     /// Frame thickness in pixels.
     pub thickness: f32,
@@ -47,7 +47,7 @@ impl Default for FrameConfig {
 }
 
 #[derive(serde::Deserialize, Serialize, Debug, Clone, PartialEq)]
-#[serde(default)]
+#[serde(deny_unknown_fields, default)]
 pub struct WindowConfig {
     /// Information to identify a particular window.
     pub identity: Identity,
@@ -124,6 +124,7 @@ impl WindowConfig {
 }
 
 #[derive(serde::Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct Identity {
     /// Window title.
     pub title: String,
@@ -142,6 +143,7 @@ impl Default for Identity {
 ///
 /// Newtype to avoid passing values incorrectly.
 #[derive(serde::Deserialize, Serialize, Default, Debug, Copy, Clone, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct Dimensions {
     /// Window width in character columns.
     pub columns: usize,

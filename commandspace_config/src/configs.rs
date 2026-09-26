@@ -134,7 +134,7 @@ impl AlacrittyConfig {
 
 /// The object deserialized from the main commandspace config file
 #[derive(Deserialize, Serialize, Debug, Clone)]
-#[serde(default)]
+#[serde(deny_unknown_fields, default)]
 pub struct Config {
     #[serde(flatten)]
     pub alacritty: AlacrittyConfigGeneral,
@@ -166,6 +166,7 @@ impl Config {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct Misc {
     pub lost_focus_ignore_duration: Duration,
     #[serde(default)]
