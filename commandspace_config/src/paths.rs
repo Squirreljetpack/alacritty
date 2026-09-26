@@ -33,6 +33,12 @@ pub fn config_dir() -> PathBuf {
 
     dirs::config_dir()._ebog("Failed to determine config directory").join(BINARY_FULL)
 }
+/// The theme presets, a directory beside the general config file. Users can drop their own TOML
+/// files in here.
+pub fn themes_dir() -> PathBuf {
+    config_dir().join("themes")
+}
+
 pub fn settings_command() -> PathBuf {
     #[cfg(debug_assertions)]
     return __home().join("gh/_fzs/commandspace-settings/src-tauri/target/debug/app");
