@@ -6,6 +6,8 @@ use super::rgb::{CellRgb, Rgb};
 #[derive(serde::Deserialize, Serialize, Clone, Debug, Default, PartialEq, Eq)]
 #[serde(deny_unknown_fields, default)]
 pub struct Colors {
+    /// The preset these colors were taken from, as named by the settings app.
+    pub name: String,
     pub primary: PrimaryColors,
     pub cursor: InvertedCellColors,
     pub vi_mode_cursor: InvertedCellColors,
