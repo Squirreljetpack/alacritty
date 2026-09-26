@@ -1,5 +1,4 @@
 use cba::bo::load_type;
-use cba::unwrap;
 use commandspace_config::LOG_TARGET_CONFIG;
 use commandspace_config::action::WindowAction;
 use commandspace_config::global_bindings::{GlobalAction, GlobalBindings};
@@ -48,21 +47,32 @@ fn load_config_or_default<T: DeserializeOwned + Default>(path: &std::path::Path)
     }
 }
 
+/// Load a config file for a reload.
+///
+/// A missing file skips the reload, so the running configuration is kept instead of being reset to
+/// defaults, and a file that is there but unusable keeps it too.
+fn try_load_config<T: DeserializeOwned>(path: &std::path::Path) -> Option<T> {
+    if !path.is_file() {
+        log::debug!(target: LOG_TARGET_CONFIG, "Skipping config reload, {path:?} does not exist");
+        return None;
+    }
+
+    match load_type(path, |s| toml::from_str(s)) {
+        Ok(config) => Some(config),
+        Err(e) => {
+            log::error!(target: LOG_TARGET_CONFIG, "Unable to load config: {e}");
+            None
+        },
+    }
+}
+
 pub fn try_load_ui_config(options: &Options) -> Option<(AlacrittyConfig, GlobalBindings)> {
-    let specific_cfg: AlacrittyConfigSpecific = unwrap!(
-        load_type(alacritty_config_path(), |s| toml::from_str(s));
-        |e| {
-            log::error!(target: LOG_TARGET_CONFIG, "Unable to load config {:?}: {e}", alacritty_config_path());
-            None
-        }
-    );
-    let mut cfg: Config = unwrap!(
-        load_type(config_path(), |s| toml::from_str(s));
-        |e| {
-            log::error!(target: LOG_TARGET_CONFIG, "Unable to load config {:?}: {e}", config_path());
-            None
-        }
-    );
+    // The specific file is hand written and optional, so a missing or unusable one falls back to
+    // default tables.
+    let specific_cfg: AlacrittyConfigSpecific = load_config_or_default(alacritty_config_path());
+    // The general file holds the configuration in use, so a missing one skips the reload and keeps
+    // the running configuration.
+    let mut cfg: Config = try_load_config(config_path())?;
 
     let mut alacritty_cfg = specific_into_alacritty_config(specific_cfg, cfg.alacritty);
 
