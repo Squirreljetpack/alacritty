@@ -19,7 +19,7 @@ use std::{env, fs};
 
 use cba::bait::TransformExt;
 use cba::{_dbg, bog};
-use log::info;
+use log::{info, warn};
 #[cfg(windows)]
 use windows_sys::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole};
 use winit::event_loop::EventLoop;
@@ -155,6 +155,12 @@ fn alacritty(mut options: Options) -> Result<(), Box<dyn Error>> {
     // Load configuration file.
     let (config, general_cfg, cb_cfg) = cli::config::load(&mut options);
     let lost_focus_ignore_duration = general_cfg.misc.lost_focus_ignore_duration;
+
+    // Create the data directory up front so the files written into it later (the clipboard database
+    // and the usage stats) always have a parent to be written to.
+    if let Err(err) = fs::create_dir_all(&general_cfg.data_dir) {
+        warn!("Failed to create data directory {}: {err}", general_cfg.data_dir.display());
+    }
 
     let general_cfg = std::sync::Arc::new(general_cfg);
 

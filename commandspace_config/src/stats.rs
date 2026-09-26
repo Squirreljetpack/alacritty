@@ -6,13 +6,11 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use cba::bo::{load_type_or_default_log, write_str};
+use cba::bait::ResultExt;
+use cba::bo::{dump_type, load_type_or_default_log};
 use jiff::civil::Date;
 use jiff::{Span, Zoned};
-use log::warn;
 use serde::{Deserialize, Serialize};
-
-use crate::LOG_TARGET_CONFIG;
 
 /// How the day keys are formatted, both for writing and for parsing them back.
 const DATE_FORMAT: &str = "%Y-%m-%d";
@@ -38,28 +36,9 @@ impl Stats {
 
     /// Save the statistics, ignoring failures to write the file.
     ///
-    /// The file is replaced in one step so that a reader never sees a half-written file.
+    /// The data directory is created when the terminal starts, so the file always has a parent here.
     pub fn save(&self, path: impl AsRef<Path>) {
-        let path = path.as_ref();
-        let Ok(contents) = toml::to_string(self) else { return };
-
-        let temp = path.with_extension("tmp");
-        if let Err(err) = write_str(&temp, &contents) {
-            warn!(
-                target: LOG_TARGET_CONFIG,
-                "Failed to save stats to {}: {err}",
-                path.display(),
-            );
-            return;
-        }
-
-        if let Err(err) = std::fs::rename(&temp, path) {
-            warn!(
-                target: LOG_TARGET_CONFIG,
-                "Failed to replace stats at {}: {err}",
-                path.display(),
-            );
-        }
+        dump_type(path, self, toml::to_string)._wlog();
     }
 
     /// Record that a terminal window has been opened.
