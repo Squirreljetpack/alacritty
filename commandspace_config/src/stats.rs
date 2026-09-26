@@ -6,7 +6,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use cba::bo::write_str;
+use cba::bo::{load_type_or_default_log, write_str};
 use jiff::civil::Date;
 use jiff::{Span, Zoned};
 use log::warn;
@@ -33,24 +33,7 @@ pub struct Stats {
 impl Stats {
     /// Load the statistics, falling back to the default when the file is missing or unreadable.
     pub fn load(path: impl AsRef<Path>) -> Self {
-        let path = path.as_ref();
-
-        let result = std::fs::read_to_string(path)
-            .map_err(|err| err.to_string())
-            .and_then(|contents| toml::from_str(&contents).map_err(|err| err.to_string()));
-
-        match result {
-            Ok(stats) => stats,
-            Err(err) if path.is_file() => {
-                warn!(
-                    target: LOG_TARGET_CONFIG,
-                    "Failed to load stats from {}: {err}",
-                    path.display(),
-                );
-                Self::default()
-            },
-            Err(_) => Self::default(),
-        }
+        load_type_or_default_log(path, |contents| toml::from_str(contents))
     }
 
     /// Save the statistics, ignoring failures to write the file.
