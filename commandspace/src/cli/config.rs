@@ -1,4 +1,4 @@
-use cba::bo::{load_type, load_type_or_default_log};
+use cba::bo::load_type;
 use cba::unwrap;
 use commandspace_config::LOG_TARGET_CONFIG;
 use commandspace_config::action::WindowAction;
@@ -17,11 +17,10 @@ use crate::paths::{alacritty_config_path, config_path};
 
 /// Load the configuration file.
 pub fn load(options: &mut Options) -> (AlacrittyConfig, Config, ServerConfig) {
-    let specific_cfg = load_specific_config(alacritty_config_path());
-    let cfg: Config = load_type_or_default_log(config_path(), |s| toml::from_str(s));
+    let specific_cfg: AlacrittyConfigSpecific = load_config_or_default(alacritty_config_path());
+    let cfg: Config = load_config_or_default(config_path());
 
-    let cb_cfg: mm_clipboard_config::Config =
-        load_type_or_default_log(cb_config_path(), |s| toml::from_str(s));
+    let cb_cfg: mm_clipboard_config::Config = load_config_or_default(cb_config_path());
 
     // cfg.alacritty remains in the main cfg
     let mut alacritty_cfg = specific_into_alacritty_config(specific_cfg, cfg.alacritty.clone());
@@ -32,52 +31,18 @@ pub fn load(options: &mut Options) -> (AlacrittyConfig, Config, ServerConfig) {
     (alacritty_cfg, cfg, cb_cfg.server)
 }
 
-/// The tables of the hand-edited alacritty config.
-const SPECIFIC_TABLES: [&str; 4] = ["mouse", "bell", "hints", "keyboard"];
-
-/// Load the hand-edited alacritty config, falling back per table so one invalid
-/// table does not discard the remaining ones.
-fn load_specific_config(path: &std::path::Path) -> AlacrittyConfigSpecific {
-    let text = match std::fs::read_to_string(path) {
-        Ok(text) => text,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Default::default(),
-        Err(e) => {
-            log::warn!(target: LOG_TARGET_CONFIG, "Using default config: unable to read {path:?}: {e}");
-            return Default::default();
-        },
-    };
-    let value: toml::Value = match toml::from_str(&text) {
-        Ok(value) => value,
-        Err(e) => {
-            log::warn!(target: LOG_TARGET_CONFIG, "Using default config: unable to parse {path:?}: {e}");
-            return Default::default();
-        },
-    };
-    let Some(table) = value.as_table() else {
-        log::warn!(target: LOG_TARGET_CONFIG, "Using default config: {path:?} is not a table");
-        return Default::default();
-    };
-
-    for key in table.keys() {
-        if !SPECIFIC_TABLES.contains(&key.as_str()) {
-            log::warn!(target: LOG_TARGET_CONFIG, "Ignoring unknown key {key:?} in {path:?}");
-        }
+/// Load a TOML config file, falling back to its default when it is missing or invalid.
+///
+/// Failures are logged under the config target, so they reach the log file and the message bar.
+fn load_config_or_default<T: DeserializeOwned + Default>(path: &std::path::Path) -> T {
+    if !path.is_file() {
+        return T::default();
     }
 
-    AlacrittyConfigSpecific {
-        mouse: specific_table(table, "mouse"),
-        bell: specific_table(table, "bell"),
-        hints: specific_table(table, "hints"),
-        keyboard: specific_table(table, "keyboard"),
-    }
-}
-
-fn specific_table<T: DeserializeOwned + Default>(table: &toml::Table, key: &str) -> T {
-    let Some(value) = table.get(key) else { return T::default() };
-    match value.clone().try_into::<T>() {
-        Ok(cfg) => cfg,
+    match load_type(path, |s| toml::from_str(s)) {
+        Ok(config) => config,
         Err(e) => {
-            log::warn!(target: LOG_TARGET_CONFIG, "Using default [{key}]: {e}");
+            log::warn!(target: LOG_TARGET_CONFIG, "Using default config due to errors: {e}");
             T::default()
         },
     }

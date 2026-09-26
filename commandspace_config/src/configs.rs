@@ -195,7 +195,7 @@ pub struct AlacrittyConfigGeneral {
 
 /// Alacritty settings which should be set manually in the alacritty.toml
 #[derive(Deserialize, Serialize, Default, Clone, Debug)]
-#[serde(default)]
+#[serde(deny_unknown_fields, default)]
 pub struct AlacrittyConfigSpecific {
     pub mouse: Mouse,
     pub bell: BellConfig,
