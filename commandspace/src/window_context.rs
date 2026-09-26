@@ -301,6 +301,8 @@ impl WindowContext {
         let event = Event::new(TerminalEvent::CursorBlinkingChange.into(), None);
         self.event_queue.push(event.into());
 
+        self.display.damage_tracker.frame().mark_fully_damaged();
+        self.display.window.request_redraw();
         self.dirty = true;
     }
 
