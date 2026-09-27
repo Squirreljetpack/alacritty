@@ -124,6 +124,9 @@ pub enum WindowAction {
     /// Toggle the current window.
     Toggle,
 
+    /// Reinitialize the current window.
+    Reinitialize,
+
     // local
     /// Hide the current window.
     Hide,

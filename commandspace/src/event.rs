@@ -412,7 +412,10 @@ impl ApplicationHandler for Processor {
                 (EventType::Window(action), _) => {
                     // create a window
                     let Some((_id, window_context)) = self.windows.iter_mut().next() else {
-                        if matches!(action, WindowAction::Toggle | WindowAction::Focus) {
+                        if matches!(
+                            action,
+                            WindowAction::Toggle | WindowAction::Focus | WindowAction::Reinitialize
+                        ) {
                             self.proxy.send_event(Event::new(EventType::CreateWindow, None));
                         }
                         return;
@@ -444,6 +447,27 @@ impl ApplicationHandler for Processor {
                             } else {
                                 window_context.display.hide()
                             };
+
+                            #[cfg(debug_assertions)]
+                            {
+                                dbg!(show, window_context.display.visible);
+                            }
+                        },
+                        WindowAction::Reinitialize => {
+                            let show = !window_context.display.visible
+                                || (!window_context.display.is_focused
+                                    && LOST_FOCUS.lock().take().is_none_or(|i| {
+                                        Instant::now().duration_since(i)
+                                            > self.extra.lost_focus_ignore_duration
+                                    }));
+
+                            if let Err(err) = window_context.replace_pty(self.proxy.clone()) {
+                                log::error!("Could not replace PTY: {err:?}");
+                            }
+
+                            if show {
+                                window_context.display.show();
+                            }
 
                             #[cfg(debug_assertions)]
                             {

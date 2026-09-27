@@ -239,6 +239,66 @@ impl WindowContext {
         })
     }
 
+    /// Replace the PTY with a fresh instance.
+    pub fn replace_pty(&mut self, proxy: EventLoopProxy) -> Result<(), Box<dyn Error>> {
+        let _ = self.notifier.0.send(Msg::Shutdown);
+
+        let pty_config = self.config.pty_config();
+        let event_proxy = EventProxy::new(proxy, self.display.window.id());
+        let terminal =
+            Term::new(self.config.term_options(), &self.display.size_info, event_proxy.clone());
+        let terminal = Arc::new(FairMutex::new(terminal));
+
+        let pty = tty::new(
+            &pty_config,
+            self.display.size_info.into(),
+            self.display.window.id().into_raw() as u64,
+        )?;
+
+        #[cfg(not(windows))]
+        let master_fd = pty.file().as_raw_fd();
+        #[cfg(not(windows))]
+        let shell_pid = pty.child().id();
+
+        let event_loop = PtyEventLoop::new(
+            Arc::clone(&terminal),
+            event_proxy.clone(),
+            pty,
+            pty_config.drain_on_exit,
+            self.config.debug.ref_test,
+        )?;
+
+        let loop_tx = event_loop.channel();
+        let _io_thread = event_loop.spawn();
+
+        if self.config.cursor.style().blinking {
+            event_proxy.send_event(TerminalEvent::CursorBlinkingChange.into());
+        }
+
+        self.terminal = terminal;
+        #[cfg(not(windows))]
+        {
+            self.master_fd = master_fd;
+            self.shell_pid = shell_pid;
+        }
+        self.notifier = Notifier(loop_tx);
+        self.cursor_blink_timed_out = false;
+        self.prev_bell_cmd = None;
+        self.inline_search_state = Default::default();
+        self.message_buffer = Default::default();
+        self.search_state = Default::default();
+        self.event_queue.clear();
+        self.mouse = Default::default();
+        self.touch = Default::default();
+        self.dirty = true;
+        if !self.preserve_title {
+            self.display.window.set_title(self.config.window.identity.title.clone());
+        }
+        self.display.window.request_redraw();
+
+        Ok(())
+    }
+
     /// Update the terminal window to the latest config.
     pub fn update_config(&mut self, new_config: Rc<AlacrittyConfig>) {
         let old_config = mem::replace(&mut self.config, new_config);
