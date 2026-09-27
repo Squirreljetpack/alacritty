@@ -27,6 +27,7 @@ pub use action::{Action, MouseAction, SearchAction, ViAction};
 pub use bindings::Binding;
 pub use bindings::{BindingKey, BindingMode, KeyBinding, MouseEvent};
 pub use configs::{AlacrittyConfig, Config};
+pub use window::SwapCmd;
 
 /// Logging target for configuration errors.
 ///

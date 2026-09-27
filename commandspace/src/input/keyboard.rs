@@ -10,7 +10,7 @@ use winit::platform::macos::OptionAsAlt;
 use alacritty_terminal::event::EventListener;
 use alacritty_terminal::term::TermMode;
 
-use crate::config::{Action, BindingKey, BindingMode, KeyBinding};
+use crate::config::{Action, BindingKey, BindingMode, KeyBinding, SwapCmd};
 use crate::display::window::ImeInhibitor;
 use crate::event::TYPING_SEARCH_DELAY;
 use crate::input::{ActionContext, Execute, Processor};
@@ -18,14 +18,25 @@ use crate::scheduler::{TimerId, Topic};
 
 impl<T: EventListener, A: ActionContext<T>> Processor<T, A> {
     /// Process key input.
-    pub fn key_input(&mut self, key: KeyEvent) {
+    pub fn key_input(&mut self, mut key: KeyEvent) {
         // IME input will be applied on commit and shouldn't trigger key bindings.
         if self.ctx.display().ime.preedit().is_some() {
             return;
         }
 
         let mode = *self.ctx.terminal().mode();
-        let mods = self.ctx.modifiers().state();
+        let mut mods = self.ctx.modifiers().state();
+
+        #[cfg(target_os = "macos")]
+        let swap_cmd = self.ctx.config().swap_cmd();
+        #[cfg(not(target_os = "macos"))]
+        let swap_cmd = SwapCmd::None;
+
+        #[cfg(target_os = "macos")]
+        if swap_cmd != SwapCmd::None {
+            swap_modifier_key_if_needed(&mut key, swap_cmd);
+            mods = swap_cmd_modifiers(mods, swap_cmd);
+        }
 
         if key.state == ElementState::Released {
             if self.ctx.inline_search_state().char_pending {
@@ -56,7 +67,7 @@ impl<T: EventListener, A: ActionContext<T>> Processor<T, A> {
         self.reset_search_delay();
 
         // Key bindings suppress the character input.
-        if self.process_key_bindings(&key) {
+        if self.process_key_bindings(&key, mods) {
             return;
         }
 
@@ -74,7 +85,7 @@ impl<T: EventListener, A: ActionContext<T>> Processor<T, A> {
         }
 
         // Mask `Alt` modifier from input when we won't send esc.
-        let mods = if self.alt_send_esc(&key, text) { mods } else { mods & !ModifiersState::ALT };
+        let mods = if self.alt_send_esc(&key, text, mods) { mods } else { mods & !ModifiersState::ALT };
 
         let build_key_sequence = Self::should_build_sequence(&key, text, mode, mods);
         let is_modifier_key = Self::is_modifier_key(&key);
@@ -87,7 +98,41 @@ impl<T: EventListener, A: ActionContext<T>> Processor<T, A> {
                 bytes.push(b'\x1b');
             }
 
-            bytes.extend_from_slice(text.as_bytes());
+            #[cfg(target_os = "macos")]
+            let custom_bytes = match swap_cmd {
+                SwapCmd::Ctrl => {
+                    if mods.control_key() && !mods.meta_key() {
+                        to_control_character(&key).map(|b| vec![b])
+                    } else if mods.meta_key() && !mods.control_key() {
+                        match key.key_without_modifiers.as_ref() {
+                            Key::Character(unmodded) => Some(unmodded.as_bytes().to_vec()),
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    }
+                },
+                SwapCmd::Alt => {
+                    if mods.meta_key() && !mods.alt_key() {
+                        match key.key_without_modifiers.as_ref() {
+                            Key::Character(unmodded) => Some(unmodded.as_bytes().to_vec()),
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    }
+                },
+                SwapCmd::None => None,
+            };
+            #[cfg(not(target_os = "macos"))]
+            let custom_bytes: Option<Vec<u8>> = None;
+
+            if let Some(custom) = custom_bytes {
+                bytes.extend(custom);
+            } else {
+                bytes.extend_from_slice(text.as_bytes());
+            }
+
             bytes
         };
 
@@ -101,15 +146,17 @@ impl<T: EventListener, A: ActionContext<T>> Processor<T, A> {
         }
     }
 
-    fn alt_send_esc(&mut self, key: &KeyEvent, text: &str) -> bool {
+    fn alt_send_esc(&mut self, key: &KeyEvent, text: &str, mods: ModifiersState) -> bool {
         #[cfg(not(target_os = "macos"))]
-        let alt_send_esc = self.ctx.modifiers().state().alt_key();
+        let alt_send_esc = mods.alt_key();
 
         #[cfg(target_os = "macos")]
         let alt_send_esc = {
             let option_as_alt = self.ctx.config().window.option_as_alt();
-            self.ctx.modifiers().state().alt_key()
-                && (option_as_alt == OptionAsAlt::Both
+            let is_swap_alt = self.ctx.config().swap_cmd() == SwapCmd::Alt;
+            mods.alt_key()
+                && (is_swap_alt
+                    || option_as_alt == OptionAsAlt::Both
                     || (option_as_alt == OptionAsAlt::OnlyLeft
                         && self.ctx.modifiers().lalt_state() == ModifiersKeyState::Pressed)
                     || (option_as_alt == OptionAsAlt::OnlyRight
@@ -122,7 +169,7 @@ impl<T: EventListener, A: ActionContext<T>> Processor<T, A> {
                     alt_send_esc
                 } else {
                     // Treat `Alt` as modifier for named keys without text, like ArrowUp.
-                    self.ctx.modifiers().state().alt_key()
+                    mods.alt_key()
                 }
             },
             _ => alt_send_esc && text.chars().count() == 1,
@@ -174,9 +221,8 @@ impl<T: EventListener, A: ActionContext<T>> Processor<T, A> {
     ///
     /// The provided mode, mods, and key must match what is allowed by a binding
     /// for its action to be executed.
-    fn process_key_bindings(&mut self, key: &KeyEvent) -> bool {
+    fn process_key_bindings(&mut self, key: &KeyEvent, mods: ModifiersState) -> bool {
         let mode = BindingMode::new(self.ctx.terminal().mode(), self.ctx.search_active());
-        let mods = self.ctx.modifiers().state();
 
         // Don't suppress char if no bindings were triggered.
         let mut suppress_chars = None;
@@ -259,7 +305,7 @@ impl<T: EventListener, A: ActionContext<T>> Processor<T, A> {
 
         // Mask `Alt` modifier from input when we won't send esc.
         let text = key.text_with_all_modifiers.as_deref().unwrap_or_default();
-        let mods = if self.alt_send_esc(&key, text) { mods } else { mods & !ModifiersState::ALT };
+        let mods = if self.alt_send_esc(&key, text, mods) { mods } else { mods & !ModifiersState::ALT };
 
         let bytes = match key.logical_key.as_ref() {
             Key::Named(NamedKey::Enter)
@@ -714,3 +760,55 @@ fn is_control_character(text: &str) -> bool {
     let codepoint = text.bytes().next().unwrap();
     text.len() == 1 && (codepoint < 0x20 || (0x7f..=0x9f).contains(&codepoint))
 }
+
+#[cfg(target_os = "macos")]
+fn swap_cmd_modifiers(mut mods: ModifiersState, swap_cmd: SwapCmd) -> ModifiersState {
+    let has_meta = mods.meta_key();
+    match swap_cmd {
+        SwapCmd::Ctrl => {
+            let has_ctrl = mods.control_key();
+            mods.set(ModifiersState::META, has_ctrl);
+            mods.set(ModifiersState::CONTROL, has_meta);
+        },
+        SwapCmd::Alt => {
+            let has_alt = mods.alt_key();
+            mods.set(ModifiersState::META, has_alt);
+            mods.set(ModifiersState::ALT, has_meta);
+        },
+        SwapCmd::None => (),
+    }
+    mods
+}
+
+#[cfg(target_os = "macos")]
+fn swap_modifier_key_if_needed(key: &mut KeyEvent, swap_cmd: SwapCmd) {
+    match (key.logical_key.as_ref(), swap_cmd) {
+        (Key::Named(NamedKey::Control), SwapCmd::Ctrl) => key.logical_key = Key::Named(NamedKey::Meta),
+        (Key::Named(NamedKey::Meta), SwapCmd::Ctrl) => key.logical_key = Key::Named(NamedKey::Control),
+        (Key::Named(NamedKey::Alt), SwapCmd::Alt) => key.logical_key = Key::Named(NamedKey::Meta),
+        (Key::Named(NamedKey::Meta), SwapCmd::Alt) => key.logical_key = Key::Named(NamedKey::Alt),
+        _ => (),
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn to_control_character(key: &KeyEvent) -> Option<u8> {
+    let b = match key.key_without_modifiers.as_ref() {
+        Key::Character(s) => s.as_bytes().first().copied()?,
+        _ => return None,
+    };
+
+    match b {
+        b'@'..=b'_' | b'a'..=b'z' | b' ' => Some(b & 0x1f),
+        b'?' => Some(0x7f),
+        b'2' => Some(0x00),
+        b'3' => Some(0x1b),
+        b'4' => Some(0x1c),
+        b'5' => Some(0x1d),
+        b'6' => Some(0x1e),
+        b'7' => Some(0x1f),
+        b'8' => Some(0x7f),
+        _ => None,
+    }
+}
+

@@ -68,6 +68,9 @@ pub struct WindowConfig {
     /// Controls which `Option` key should be treated as `Alt`.
     option_as_alt: OptionAsAlt,
 
+    /// On macOS, swap Command modifier with Ctrl or Alt when forwarding key events to the terminal.
+    pub swap_cmd: SwapCmd,
+
     /// Resize increments.
     pub resize_increments: bool,
 
@@ -90,6 +93,7 @@ impl Default for WindowConfig {
             dimensions: Default::default(),
             resize_increments: Default::default(),
             option_as_alt: Default::default(),
+            swap_cmd: Default::default(),
         }
     }
 }
@@ -121,6 +125,11 @@ impl WindowConfig {
             OptionAsAlt::Both => WinitOptionAsAlt::Both,
             OptionAsAlt::None => WinitOptionAsAlt::None,
         }
+    }
+
+    #[inline]
+    pub fn swap_cmd(&self) -> SwapCmd {
+        self.swap_cmd
     }
 }
 
@@ -225,7 +234,6 @@ impl<'de> Deserialize<'de> for Class {
 }
 
 #[derive(serde::Deserialize, Serialize, Default, Debug, Clone, Copy, PartialEq, Eq)]
-//
 #[derive(strum_macros::EnumIter, strum_macros::IntoStaticStr)]
 pub enum OptionAsAlt {
     /// The left `Option` key is treated as `Alt`.
@@ -240,6 +248,23 @@ pub enum OptionAsAlt {
     /// No special handling is applied for `Option` key.
     #[default]
     None,
+}
+
+#[derive(serde::Deserialize, Serialize, Default, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(strum_macros::EnumIter, strum_macros::IntoStaticStr)]
+pub enum SwapCmd {
+    /// No swapping applied.
+    #[default]
+    #[serde(alias = "none")]
+    None,
+
+    /// Swap Command with Control.
+    #[serde(alias = "ctrl")]
+    Ctrl,
+
+    /// Swap Command with Alt / Option.
+    #[serde(alias = "alt")]
+    Alt,
 }
 
 /// System decorations theme variant.

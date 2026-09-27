@@ -25,7 +25,7 @@ use super::mouse::Mouse;
 use super::scrolling::Scrolling;
 use super::selection::Selection;
 use super::terminal::Terminal;
-use super::window::WindowConfig;
+use super::window::{SwapCmd, WindowConfig};
 
 #[derive(Deserialize, Serialize, Default, Clone, Debug)]
 pub struct AlacrittyConfig {
@@ -130,6 +130,11 @@ impl AlacrittyConfig {
     pub fn mouse_bindings(&self) -> &[MouseBinding] {
         &self.mouse.bindings.0
     }
+
+    #[inline]
+    pub fn swap_cmd(&self) -> SwapCmd {
+        self.window.swap_cmd
+    }
 }
 
 /// The object deserialized from the main commandspace config file
@@ -207,3 +212,4 @@ pub struct AlacrittyConfigSpecific {
     pub hints: Hints,
     pub keyboard: Keyboard,
 }
+
