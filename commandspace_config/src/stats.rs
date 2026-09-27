@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use cba::bait::ResultExt;
-use cba::bo::{dump_type, load_type_or_default_log};
+use cba::bo::dump_type_atomic;
 use jiff::civil::Date;
 use jiff::{Span, Zoned};
 use serde::{Deserialize, Serialize};
@@ -29,16 +29,11 @@ pub struct Stats {
 }
 
 impl Stats {
-    /// Load the statistics, falling back to the default when the file is missing or unreadable.
-    pub fn load(path: impl AsRef<Path>) -> Self {
-        load_type_or_default_log(path, |contents| toml::from_str(contents))
-    }
-
     /// Save the statistics, ignoring failures to write the file.
     ///
     /// The data directory is created when the terminal starts, so the file always has a parent here.
     pub fn save(&self, path: impl AsRef<Path>) {
-        dump_type(path, self, toml::to_string)._wlog();
+        dump_type_atomic(path, self, toml::to_string)._wlog();
     }
 
     /// Record that a terminal window has been opened.

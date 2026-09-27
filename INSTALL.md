@@ -312,12 +312,12 @@ sudo tic -xe alacritty,alacritty-direct extra/alacritty.info
 ### Desktop Entry
 
 Many Linux and BSD distributions support desktop entries for adding applications
-to system menus. This will install the desktop entry for Alacritty:
+to system menus. This will install the desktop entry for CommandSpace:
 
 ```sh
-sudo cp target/release/alacritty /usr/local/bin # or anywhere else in $PATH
-sudo cp extra/logo/alacritty-term.svg /usr/share/pixmaps/Alacritty.svg
-sudo desktop-file-install extra/linux/Alacritty.desktop
+sudo cp target/release/commandspace /usr/local/bin # or anywhere else in $PATH
+sudo cp extra/logo/alacritty-term.svg /usr/share/pixmaps/CommandSpace.svg
+sudo desktop-file-install extra/linux/CommandSpace.desktop
 sudo update-desktop-database
 ```
 

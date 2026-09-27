@@ -23,8 +23,25 @@ echo "==> Building settings app ($settings_dir)"
 if [[ ! -d "$settings_dir/node_modules" ]]; then
 	npm --prefix "$settings_dir" install
 fi
-npm --prefix "$settings_dir" run build
+
+# The app embeds dist/ and cargo reruns the app build when dist/ mtimes change, so
+# rebuild the frontend only when an input is newer than the generated index.html.
+if [[ ! -f "$settings_dir/dist/index.html" ]] ||
+	[[ -n "$(find \
+		"$settings_dir/src" \
+		"$settings_dir/public" \
+		"$settings_dir/index.html" \
+		"$settings_dir/package.json" \
+		"$settings_dir/vite.config.js" \
+		-newer "$settings_dir/dist/index.html" -print -quit 2>/dev/null)" ]]; then
+	npm --prefix "$settings_dir" run build
+else
+	echo "==> Frontend unchanged, skipping npm run build"
+fi
+
 cargo build --release --manifest-path "$settings_manifest"
+
+export COMMANDSPACE_RESEED_THEMES=true
 
 case "$(uname -s)" in
 Darwin)

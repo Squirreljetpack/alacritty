@@ -1,10 +1,9 @@
-use cba::bo::load_type;
+use cba::bo::{load_type, load_type_or_default};
 use commandspace_config::LOG_TARGET_CONFIG;
 use commandspace_config::action::WindowAction;
 use commandspace_config::global_bindings::{GlobalAction, GlobalBindings};
 use commandspace_config::paths::cb_config_path;
 use mm_clipboard_config::ServerConfig;
-use serde::de::DeserializeOwned;
 
 use crate::cli::Options;
 
@@ -16,10 +15,18 @@ use crate::paths::{alacritty_config_path, config_path};
 
 /// Load the configuration file.
 pub fn load(options: &mut Options) -> (AlacrittyConfig, Config, ServerConfig) {
-    let specific_cfg: AlacrittyConfigSpecific = load_config_or_default(alacritty_config_path());
-    let cfg: Config = load_config_or_default(config_path());
+    let specific_cfg: AlacrittyConfigSpecific =
+        load_type_or_default(alacritty_config_path(), Some(LOG_TARGET_CONFIG), |s| {
+            toml::from_str(s)
+        });
+    let cfg: Config = load_type_or_default(config_path(), Some(LOG_TARGET_CONFIG), |s| {
+        toml::from_str(s)
+    });
 
-    let cb_cfg: mm_clipboard_config::Config = load_config_or_default(cb_config_path());
+    let cb_cfg: mm_clipboard_config::Config =
+        load_type_or_default(cb_config_path(), Some(LOG_TARGET_CONFIG), |s| {
+            toml::from_str(s)
+        });
 
     // cfg.alacritty remains in the main cfg
     let mut alacritty_cfg = specific_into_alacritty_config(specific_cfg, cfg.alacritty.clone());
@@ -30,65 +37,27 @@ pub fn load(options: &mut Options) -> (AlacrittyConfig, Config, ServerConfig) {
     (alacritty_cfg, cfg, cb_cfg.server)
 }
 
-/// Load a TOML config file, falling back to its default when it is missing or invalid.
-///
-/// Failures are logged under the config target, so they reach the log file and the message bar.
-fn load_config_or_default<T: DeserializeOwned + Default>(path: &std::path::Path) -> T {
-    if !path.is_file() {
-        return T::default();
-    }
+pub fn try_load_ui_config(options: &Options) -> Option<(AlacrittyConfig, GlobalBindings, bool)> {
+    let specific_cfg: AlacrittyConfigSpecific = if alacritty_config_path().exists() {
+        load_type(alacritty_config_path(), |s| toml::from_str(s))
+                .inspect_err(|err| log::error!(target: LOG_TARGET_CONFIG, "{err}"))
+                .ok()?
+    } else {
+        Default::default()
+    };
 
-    match load_type(path, |s| toml::from_str(s)) {
-        Ok(config) => config,
-        Err(e) => {
-            log::warn!(target: LOG_TARGET_CONFIG, "Using default config due to errors: {e}");
-            T::default()
-        },
-    }
-}
-
-/// Load a config file for a reload.
-///
-/// A missing file skips the reload, so the running configuration is kept instead of being reset to
-/// defaults, and a file that is there but unusable keeps it too.
-fn try_load_config<T: DeserializeOwned>(path: &std::path::Path) -> Option<T> {
-    if !path.is_file() {
-        log::debug!(target: LOG_TARGET_CONFIG, "Skipping config reload, {path:?} does not exist");
-        return None;
-    }
-
-    match load_type(path, |s| toml::from_str(s)) {
-        Ok(config) => Some(config),
-        Err(e) => {
-            log::error!(target: LOG_TARGET_CONFIG, "Unable to load config: {e}");
-            None
-        },
-    }
-}
-
-pub fn try_load_ui_config(options: &Options) -> Option<(AlacrittyConfig, GlobalBindings)> {
-    // The specific file is hand written and optional, so a missing or unusable one falls back to
-    // default tables.
-    let specific_cfg: AlacrittyConfigSpecific = load_config_or_default(alacritty_config_path());
-    // The general file holds the configuration in use, so a missing one skips the reload and keeps
-    // the running configuration.
-    let mut cfg: Config = try_load_config(config_path())?;
+    let mut cfg: Config = load_type(config_path(), |s| toml::from_str(s))
+        .inspect_err(|err| log::error!(target: LOG_TARGET_CONFIG, "{err}"))
+        .ok()?;
 
     let mut alacritty_cfg = specific_into_alacritty_config(specific_cfg, cfg.alacritty);
 
     // Override config with CLI options.
     options.override_config(&mut alacritty_cfg);
 
-    let key = cfg.bindings.1;
-    let action = GlobalAction::Window(WindowAction::Toggle);
+    cfg.bindings.0.insert(cfg.bindings.1, GlobalAction::Window(WindowAction::Toggle));
 
-    if let Some((_, a)) = cfg.bindings.0.iter_mut().find(|(k, _)| *k == key) {
-        *a = action;
-    } else {
-        cfg.bindings.0.push((key, action));
-    }
-
-    Some((alacritty_cfg, cfg.bindings))
+    Some((alacritty_cfg, cfg.bindings, cfg.misc.start_at_login))
 }
 
 pub fn specific_into_alacritty_config(

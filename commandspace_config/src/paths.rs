@@ -50,6 +50,21 @@ pub fn current_exe() -> std::ffi::OsString {
     std::env::current_exe().map(OsString::from).unwrap_or(BINARY_FULL.into())
 }
 
+pub fn commandspace_app_path() -> Option<PathBuf> {
+    if let Ok(path) = std::env::current_exe() {
+        #[cfg(target_os = "macos")]
+        if let Some(app_dir) = path.parent().and_then(|p| p.parent()).and_then(|p| p.parent()) {
+            if app_dir.extension().is_some_and(|ext| ext == "app") {
+                return Some(app_dir.to_path_buf());
+            }
+        }
+        return Some(path);
+    }
+
+    which::which(BINARY_FULL).ok()
+}
+
+
 // the absolute home directory, or root
 expr_as_path_fn!(
     __home,

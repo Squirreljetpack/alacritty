@@ -1,3 +1,4 @@
+use cba::vecmap::VecMap;
 use keyboard_types::{Code, Modifiers};
 
 use crate::action::WindowAction;
@@ -32,7 +33,7 @@ pub struct CommandAction {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct GlobalBindings(pub GlobalBindingsMap, pub HotKey);
 
-pub type GlobalBindingsMap = Vec<(HotKey, GlobalAction)>;
+pub type GlobalBindingsMap = VecMap<HotKey, GlobalAction>;
 
 impl Default for GlobalBindings {
     fn default() -> Self {

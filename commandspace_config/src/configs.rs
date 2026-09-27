@@ -163,6 +163,10 @@ impl Config {
     pub fn stats_path(&self) -> PathBuf {
         self.data_dir.join("stats.toml")
     }
+
+    pub fn marker_dir(&self) -> PathBuf {
+        self.data_dir.join("markers")
+    }
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]

@@ -17,7 +17,6 @@ use std::io::{self, Write};
 use std::path::PathBuf;
 use std::{env, fs};
 
-use cba::bait::TransformExt;
 use cba::{_dbg, bog};
 use log::{info, warn};
 #[cfg(windows)]
@@ -30,6 +29,7 @@ use alacritty_terminal::tty;
 
 mod cli;
 mod clipboard;
+pub mod autostart;
 pub use commandspace_config as config;
 use commandspace_config::paths;
 mod daemon;
@@ -153,7 +153,7 @@ fn alacritty(mut options: Options) -> Result<(), Box<dyn Error>> {
     info!("Running on Wayland");
 
     // Load configuration file.
-    let (config, general_cfg, cb_cfg) = cli::config::load(&mut options);
+    let (config, general_cfg, mut cb_cfg) = cli::config::load(&mut options);
     let lost_focus_ignore_duration = general_cfg.misc.lost_focus_ignore_duration;
 
     // Create the data directory up front so the files written into it later (the clipboard database
@@ -162,20 +162,25 @@ fn alacritty(mut options: Options) -> Result<(), Box<dyn Error>> {
         warn!("Failed to create data directory {}: {err}", general_cfg.data_dir.display());
     }
 
+    let marker_dir = general_cfg.marker_dir();
+    if let Err(err) = fs::create_dir_all(&marker_dir) {
+        warn!("Failed to create marker directory {}: {err}", marker_dir.display());
+    }
+    cb_cfg.marker_dir = Some(marker_dir);
+    cb_cfg.ipc = None;
+
     let general_cfg = std::sync::Arc::new(general_cfg);
 
     // Start clipboard logger.
     let cb_path = general_cfg.clipboard_db();
     std::thread::spawn(move || mm_clipboard_server::run_logger_sync(cb_path, cb_cfg));
 
-    let global_bindings = general_cfg.bindings.0.clone().modify(|x| {
-        x.push((
-            general_cfg.bindings.1,
-            commandspace_config::global_bindings::GlobalAction::Window(
-                commandspace_config::action::WindowAction::Toggle,
-            ),
-        ))
-    });
+    // Force the window toggle onto its dedicated key, replacing any binding the user put there.
+    let mut global_bindings = general_cfg.bindings.clone();
+    let toggle = commandspace_config::global_bindings::GlobalAction::Window(
+        commandspace_config::action::WindowAction::Toggle,
+    );
+    global_bindings.0.insert(general_cfg.bindings.1, toggle);
 
     _dbg!(&config.window);
 
@@ -201,14 +206,16 @@ fn alacritty(mut options: Options) -> Result<(), Box<dyn Error>> {
     #[cfg(target_os = "macos")]
     macos::disable_autofill();
 
-    setup_autolaunch(&general_cfg);
+    if let Err(err) = autostart::set_start_at_login(general_cfg.misc.start_at_login) {
+        warn!("Failed to setup start at login: {err}");
+    }
 
     // Setup automatic RAII cleanup for our files.
     let log_cleanup = log_file.filter(|_| !config.debug.persistent_logging);
     let _files = TemporaryFiles { log_file: log_cleanup };
 
     // hotkey manager
-    let (hotkey_tx, hotkey_rx) = tokio::sync::watch::channel(global_bindings);
+    let (hotkey_tx, hotkey_rx) = tokio::sync::watch::channel(global_bindings.0);
     crate::global_hotkey::start_hotkeys_task(hotkey_rx, proxy.clone());
 
     // Event processor.
@@ -222,49 +229,6 @@ fn alacritty(mut options: Options) -> Result<(), Box<dyn Error>> {
     info!("Goodbye");
 
     result
-}
-
-fn setup_autolaunch(config: &config::Config) {
-    let app_name = "CommandSpace";
-    let app_path = match env::current_exe() {
-        Ok(path) => {
-            #[cfg(target_os = "macos")]
-            {
-                // On macOS, if we're in a bundle, current_exe is .../CommandSpace.app/Contents/MacOS/commandspace
-                // auto-launch works better with the .app path.
-                if path.to_string_lossy().contains(".app/Contents/MacOS/") {
-                    path.parent()
-                        .and_then(|p| p.parent())
-                        .and_then(|p| p.parent())
-                        .map(|p| p.to_path_buf())
-                        .unwrap_or(path)
-                } else {
-                    path
-                }
-            }
-            #[cfg(not(target_os = "macos"))]
-            path
-        },
-        Err(_) => return,
-    };
-
-    let auto = match auto_launch::AutoLaunchBuilder::new()
-        .set_app_name(app_name)
-        .set_app_path(&app_path.to_string_lossy())
-        .set_use_launch_agent(true)
-        .build()
-    {
-        Ok(auto) => auto,
-        Err(_) => return,
-    };
-
-    if config.misc.start_at_login {
-        if !auto.is_enabled().unwrap_or(false) {
-            let _ = auto.enable();
-        }
-    } else if auto.is_enabled().unwrap_or(false) {
-        let _ = auto.disable();
-    }
 }
 
 pub struct Extra {

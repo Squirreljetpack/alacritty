@@ -15,15 +15,16 @@ const MIN_BLINK_CYCLES_BEFORE_PAUSE: u64 = 1;
 
 #[derive(serde::Deserialize, Serialize, Copy, Clone, Debug, PartialEq)]
 #[serde(deny_unknown_fields, default)]
+#[matchmaker_partial_macros::partial(derive(Deserialize, Serialize, Copy, Clone, Debug, PartialEq))]
 pub struct Cursor {
     pub style: ConfigCursorStyle,
     pub vi_mode_style: Option<ConfigCursorStyle>,
     pub unfocused_hollow: bool,
     pub hide_when_typing: bool,
 
-    thickness: Percentage,
-    blink_interval: u64,
-    blink_timeout: u8,
+    pub thickness: Percentage,
+    pub blink_interval: u64,
+    pub blink_timeout: u8,
 }
 
 impl Default for Cursor {

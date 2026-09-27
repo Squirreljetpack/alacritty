@@ -48,6 +48,7 @@ impl Default for FrameConfig {
 
 #[derive(serde::Deserialize, Serialize, Debug, Clone, PartialEq)]
 #[serde(deny_unknown_fields, default)]
+#[matchmaker_partial_macros::partial(derive(Deserialize, Serialize, Debug, Clone, PartialEq))]
 pub struct WindowConfig {
     /// Information to identify a particular window.
     pub identity: Identity,
@@ -100,8 +101,8 @@ impl WindowConfig {
         let columns = self.dimensions.columns;
 
         Dimensions {
-            lines: if lines == 0 { 25 } else { lines },
-            columns: if columns == 0 { 80 } else { columns },
+            lines: if lines == 0 { 24 } else { lines },
+            columns: if columns == 0 { 86 } else { columns },
         }
     }
 

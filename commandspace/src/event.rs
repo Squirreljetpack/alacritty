@@ -49,6 +49,7 @@ use alacritty_terminal::term::cell::Flags;
 use alacritty_terminal::term::search::{Match, RegexSearch};
 use alacritty_terminal::term::{self, ClipboardType, Term, TermMode};
 use alacritty_terminal::vte::ansi::NamedColor;
+use cba::bo::load_type_or_default;
 
 use crate::ConfigMonitor;
 use crate::cli::config::try_load_ui_config;
@@ -194,7 +195,8 @@ impl Processor {
     fn record_window(&self) {
         let path = &self.extra.stats_path;
 
-        let mut stats = Stats::load(path);
+        let mut stats: Stats =
+            load_type_or_default(path, Some(LOG_TARGET_CONFIG), |s| toml::from_str(s));
         stats.record_window();
         stats.save(path);
     }
@@ -356,7 +358,9 @@ impl ApplicationHandler for Processor {
                     }
 
                     // Load config and update each terminal.
-                    if let Some((config, bindings)) = try_load_ui_config(&self.cli_options) {
+                    if let Some((config, bindings, start_at_login)) =
+                        try_load_ui_config(&self.cli_options)
+                    {
                         _dbg!(&config);
 
                         self.config = Rc::new(config);
@@ -366,6 +370,10 @@ impl ApplicationHandler for Processor {
                         }
 
                         let _ = self.extra.hotkey_tx.send_replace(bindings.0);
+
+                        if let Err(err) = crate::autostart::set_start_at_login(start_at_login) {
+                            log::warn!("Failed to update start at login on config reload: {err}");
+                        }
                     };
                 },
                 // Create a new terminal window.

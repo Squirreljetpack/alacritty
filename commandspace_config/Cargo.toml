@@ -21,8 +21,11 @@
     toml.workspace = true
     jiff           = "0.2"
 
+    matchmaker-partial        = { version = "0.1.4", path = "../../matchmaker/matchmaker-partial" }
+    matchmaker-partial-macros = { version = "0.1.4", path = "../../matchmaker/matchmaker-partial-macros" }
+
     # paths
-    cli_boilerplate_automation = "0"
+    cli_boilerplate_automation = { version = "0", features = [ "serde" ] }
     dirs                       = "6.0.0"
     which                      = "8.0.0"
 

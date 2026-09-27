@@ -13,17 +13,18 @@ mod inner {
 
     use std::sync::Arc;
 
+    use cba::vecmap::VecMap;
     use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState, hotkey::HotKey};
     use parking_lot::Mutex;
     use tokio::sync::watch;
 
-    pub type BindingsMap = Arc<Mutex<Vec<(u32, GlobalAction)>>>;
+    pub type BindingsMap = Arc<Mutex<VecMap<u32, GlobalAction>>>;
 
     pub fn start_hotkeys_task(
         mut receiver: watch::Receiver<GlobalBindingsMap>,
         event_proxy: EventLoopProxy,
     ) {
-        let bindings_map: BindingsMap = Arc::new(Mutex::new(Vec::new()));
+        let bindings_map: BindingsMap = Arc::new(Mutex::new(VecMap::new()));
         let handler_bindings = Arc::clone(&bindings_map);
         let handler_proxy = event_proxy.clone();
 
@@ -31,9 +32,7 @@ mod inner {
             if matches!(event.state, HotKeyState::Pressed) {
                 log::debug!("Received hotkey {event:?}.");
                 let map = handler_bindings.lock();
-                if let Some(action) =
-                    map.iter().find_map(|(id, action)| (*id == event.id).then_some(action))
-                {
+                if let Some(action) = map.get(&event.id) {
                     action.clone().dispatch(&handler_proxy);
                 }
             }
@@ -60,12 +59,7 @@ mod inner {
 
                     // Release the previous hotkeys before taking them again: registering a key that
                     // this process still holds fails with `AlreadyRegistered`.
-                    if !registered.is_empty() {
-                        if let Err(e) = manager.unregister_all(&registered) {
-                            log::error!("Failed to release hotkeys: {:?}", e);
-                        }
-                        registered.clear();
-                    }
+                    unregister_hotkeys(&manager, &mut registered);
 
                     let total = bindings.len();
                     let map = register_hotkeys(&manager, &mut registered, bindings);
@@ -80,23 +74,38 @@ mod inner {
         });
     }
 
+    /// Releases every registered key and keeps tracking any key the OS refused to release.
+    fn unregister_hotkeys(manager: &GlobalHotKeyManager, registered: &mut Vec<HotKey>) {
+        registered.retain(|hotkey| match manager.unregister(*hotkey) {
+            Ok(()) => false,
+            Err(error) => {
+                log::error!("Failed to release hotkey {hotkey:?}: {error:?}");
+                true
+            },
+        });
+    }
     /// Registers every binding it can, logging the keys another client already holds.
     fn register_hotkeys(
         manager: &GlobalHotKeyManager,
         registered: &mut Vec<HotKey>,
         bindings: GlobalBindingsMap,
-    ) -> Vec<(u32, GlobalAction)> {
-        let mut hk_binds = Vec::new();
+    ) -> VecMap<u32, GlobalAction> {
+        let mut hk_binds = VecMap::new();
 
         for (hotkey, action) in bindings {
             let mods = hotkey.mods;
             let code = hotkey.key;
             let hk = HotKey::new(Some(mods), code);
 
+            if registered.contains(&hk) {
+                hk_binds.insert(hk.id(), action);
+                continue;
+            }
+
             match manager.register(hk) {
                 Ok(()) => {
                     registered.push(hk);
-                    hk_binds.push((hk.id(), action));
+                    hk_binds.insert(hk.id(), action);
                 },
                 Err(err) => log::error!("Failed to register {hotkey:?}: {err:?}"),
             }
